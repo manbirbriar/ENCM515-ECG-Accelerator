@@ -1,6 +1,8 @@
 from __future__ import annotations
 from hardware_unit import HardwareUnit
 
+# Every HardwareUnit must be registered here before the simulation runs
+# On each call to tick(), the clock increments its cycle counter and calls tick() on every registered unit
 class ClockUnit:
   def __init__(self):
     self.cycle: int = 0
@@ -22,7 +24,9 @@ class ClockUnit:
   def tick(self) -> int:
     self.cycle += 1
 
-    for unit in self.units:
+    # Ticking in reverse order (back-to-front) prevents artificial 1-cycle delays between connected units
+    # TODO: I'm not 100% sure on this, but I am convincing myself that it makes sense
+    for unit in reversed(self.units):
       unit.tick(self.cycle)
 
     if any(unit.is_stalled() for unit in self.units):
