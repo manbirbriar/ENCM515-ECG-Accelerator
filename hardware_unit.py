@@ -55,7 +55,7 @@ class HardwareUnit(ABC):
   def compute(self, data: Any) -> Any:
     return
 
-  # Determines if the hardware units is available for computation
+  # Determines if the hardware unit is available for computation
   def is_available(self) -> bool:
     return not self.busy and not self.input_data
   
