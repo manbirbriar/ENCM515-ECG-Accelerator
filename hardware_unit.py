@@ -1,6 +1,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
+
 class HardwareUnit(ABC):
   def __init__(self, name: str, latency_cycles: int = 1):
     self.name: str = name
@@ -14,12 +15,12 @@ class HardwareUnit(ABC):
 
     self.next_unit: HardwareUnit | None = None
 
-  # wires this unit's output to next_unit
+  # Wires this unit's output to next_unit
   def connect(self, next_unit: HardwareUnit) -> HardwareUnit:
     self.next_unit = next_unit
     return next_unit
 
-  # used to ensure that each unit only does 1 clock cycle of work per cycle
+  # Used to ensure that each unit only does 1 clock cycle of work per cycle
   def tick(self, current_cycle: int) -> None:
     self.current_cycle = current_cycle
 
@@ -54,11 +55,11 @@ class HardwareUnit(ABC):
   def compute(self, data: Any) -> Any:
     return
 
-  # determines if the hardware units is available for computation
+  # Determines if the hardware units is available for computation
   def is_available(self) -> bool:
     return not self.busy and not self.input_data
   
-  # a hardware unit is stalling if it has output data and is not busy
+  # A hardware unit is stalling if it has output data and is not busy
   def is_stalled(self) -> bool:
     return not self.busy and self.output_data
 

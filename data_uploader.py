@@ -1,7 +1,7 @@
 from hardware_unit import HardwareUnit
 import numpy as np
 
-# Loads the entire MIT-BIH record into memory on initialisation, then on each tick pushes exactly one sample into the connected CircularBuffer
+# Loads the entire MIT-BIH record into memory on initialisation, then on each tick pushes exactly one sample into the connected SampleQueue
 # MIT-BIH is sampled at 360 Hz. Thus, one sample per tick means each clock cycle represents a sample period of ~2.78ms
 # When all samples have been sent, the uploader becomes inactive
 # samples will be in either fixed or floating point format
@@ -14,7 +14,7 @@ class DataUploader(HardwareUnit):
     self.total_samples: int = len(self.samples)
     self.active: bool = True
 
-  # Push one sample per tick into the CircularBuffer
+  # Push one sample per tick into the SampleQueue
   def tick(self, current_cycle: int) -> None:
     self.current_cycle = current_cycle
 
@@ -25,8 +25,8 @@ class DataUploader(HardwareUnit):
       self.active = False
       return
 
-    # next_unit is expected to be the CircularBuffer
-    if self.next_unit is not None and self.next_unit.is_available():
+    # next_unit is expected to be the SampleQueue
+    if self.next_unit and self.next_unit.is_available():
       sample = self.samples[self.sample_index]
       self.next_unit.receive_sample(sample)
       self.sample_index += 1

@@ -9,18 +9,18 @@ class ClockUnit:
     self.units: list[HardwareUnit] = []
     self.stalled_cycles: int = 0
 
-  # subscribes a hardware unit to the clock unit
+  # Subscribes a hardware unit to the clock unit
   def subscribe(self, unit: HardwareUnit) -> ClockUnit:
     self.units.append(unit)
     return self
 
-  # subscribes multiple hardware units to the clock unit
+  # Subscribes multiple hardware units to the clock unit
   def subscribe_many(self, units: list[HardwareUnit]) -> ClockUnit:
     for unit in units:
       self.subscribe(unit)
     return self
 
-  # sends tick event to subscribed hardware units
+  # Sends tick event to subscribed hardware units
   def tick(self) -> int:
     self.cycle += 1
 

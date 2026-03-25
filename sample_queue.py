@@ -1,7 +1,7 @@
 from hardware_unit import HardwareUnit
 import numpy as np
 
-class CircularBuffer(HardwareUnit):
+class SampleQueue(HardwareUnit):
   # MIT-BIH dataset sample rate is 360Hz
   # TODO: I've gone with a 0.2s wide window, but I cannot justify it
   # window_size = 360 samples/s * 0.2s = 72 samples
@@ -50,7 +50,7 @@ class CircularBuffer(HardwareUnit):
     self.sample_count -= self.hop_size
     return window
 
-  # CircularBuffer has no autonomous work to do each cycle
+  # SampleQueue has no autonomous work to do each cycle
   # Tick is implemented only to satisfy ClockUnit registration and to clear the stall flag if space has freed up
   def tick(self, current_cycle: int) -> None:
     self.current_cycle = current_cycle
@@ -69,4 +69,4 @@ class CircularBuffer(HardwareUnit):
     return self.stalled
 
   def __repr__(self) -> str:
-    return f"<CircularBuffer name={self.name} count={self.sample_count}/{self.buffer_size} window_ready={self.window_ready()} stalled={self.stalled}>"
+    return f"<SampleQueue name={self.name} count={self.sample_count}/{self.buffer_size} window_ready={self.window_ready()} stalled={self.stalled}>"

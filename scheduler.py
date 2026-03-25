@@ -1,10 +1,10 @@
 from hardware_unit import HardwareUnit
-from circular_buffer import CircularBuffer
+from sample_queue import SampleQueue
 
 # TODO: LOOK OVER
 class Scheduler(HardwareUnit):
   """
-  Watches the CircularBuffer and dispatches windows to pipeline lanes.
+  Watches the SampleQueue and dispatches windows to pipeline lanes.
 
   Each tick, if a full window is ready and at least one lane is free,
   the scheduler extracts the window from the buffer and sends it to
@@ -18,37 +18,37 @@ class Scheduler(HardwareUnit):
   Parameters
   ----------
   name           : human-readable label
-  circular_buffer: the CircularBuffer instance to poll
+  sample_queue: the SampleQueue instance to poll
   lanes          : list of the first HardwareUnit in each pipeline lane
                   (i.e. the LowPassFilter of each lane)
   """
 
-  def __init__(self, name: str, circular_buffer: CircularBuffer, lanes: list[HardwareUnit]):
+  def __init__(self, name: str, sample_queue: SampleQueue, lanes: list[HardwareUnit]):
     super().__init__(name, latency_cycles=1)
 
-    self.circular_buffer: CircularBuffer = circular_buffer
+    self.sample_queue: SampleQueue = sample_queue
     self.lanes: list[HardwareUnit] = lanes
 
-    self.stall_count: int = 0       # times scheduler waited for a free lane
-    self.dispatched_count: int = 0  # total windows successfully dispatched
-    self._stalled: bool = False     # current cycle stall state for ClockUnit
+    self.stall_count: int = 0
+    self.dispatched_count: int = 0
+    self.stalled: bool = False
 
   def tick(self, current_cycle: int) -> None:
     self.current_cycle = current_cycle
-    self._stalled = False
+    self.stalled = False
 
-    if not self.circular_buffer.window_ready():
+    if not self.sample_queue.window_ready():
       return
 
     free_lane = self._find_free_lane()
 
     if free_lane is None:
       # All lanes busy — stall
-      self._stalled = True
+      self.stalled = True
       self.stall_count += 1
       return
 
-    window = self.circular_buffer.get_window()
+    window = self.sample_queue.get_window()
     free_lane.input_data = window
     self.dispatched_count += 1
 
@@ -64,12 +64,7 @@ class Scheduler(HardwareUnit):
     return data
 
   def is_stalled(self) -> bool:
-    return self._stalled
+    return self.stalled
 
   def __repr__(self) -> str:
-    return (
-      f"<Scheduler name={self.name!r} "
-      f"dispatched={self.dispatched_count} "
-      f"stall_count={self.stall_count} "
-      f"stalled_this_cycle={self._stalled}>"
-    )
+    return f"<Scheduler name={self.name} dispatched={self.dispatched_count} stall_count={self.stall_count} stalled_this_cycle={self.stalled}>"    
