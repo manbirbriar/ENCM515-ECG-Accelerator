@@ -4,6 +4,10 @@ from clock_unit import ClockUnit
 from sample_queue import SampleQueue
 from data_uploader import DataUploader
 from data_visualizer import DataVisualizer
+from scheduler import Scheduler
+from derivative_unit import DerivativeUnit
+from squaring_unit import SquaringUnit
+from result_sink import ResultSink
 
 FIXED_POINT_SCALE = 2**15 - 1
 
@@ -19,6 +23,16 @@ def load_fixed_samples(record_path: str, channel: int = 0) -> np.ndarray:
   raw = record.p_signal[:, channel]
   normalised = raw / np.max(np.abs(raw))
   return (normalised * FIXED_POINT_SCALE).astype(np.int16)
+
+# helper function to stitch all saved windows together (flattening windows into continuous traces)
+def stitch_windows(windows: list[list[float]], hop_size: int) -> list[float]:
+  if not windows:
+    return []
+
+  stitched = list(windows[0])
+  for window in windows[1:]:
+    stitched.extend(window[hop_size:])
+  return stitched
 
 # TODO: Confirm that this is working correctly
 if __name__ == "__main__":
@@ -36,21 +50,46 @@ if __name__ == "__main__":
   data_uploader = DataUploader("data_uploader", float_samples)
   data_uploader.connect(sample_queue)
 
+  derivative_unit = DerivativeUnit("derivative_unit", latency_cycles=2)
+  squaring_unit = SquaringUnit("squaring_unit", latency_cycles=1)
+  sink = ResultSink("sink")
+
+  derivative_unit.connect(squaring_unit)
+  squaring_unit.connect(sink)
+
+  scheduler = Scheduler("scheduler", sample_queue, lanes=[derivative_unit])
+
   clock_unit = ClockUnit()
-  clock_unit.subscribe_many([sample_queue, data_uploader])
+  clock_unit.subscribe_many([sample_queue, data_uploader, scheduler, derivative_unit, squaring_unit, sink])
 
-  visualization = DataVisualizer()
-
-  while data_uploader.is_available():
+  while data_uploader.is_available() or sample_queue.window_ready() or not derivative_unit.is_available() or not squaring_unit.is_available():
     clock_unit.tick()
 
-    if sample_queue.window_ready():
-      window = sample_queue.get_window()
-      # window[:36] to remove ghosting
-      visualization.add_snapshot("Raw ECG", window[:36])
+    # if sample_queue.window_ready():
+    #   window = sample_queue.get_window()
+    #   # window[:36] to remove ghosting
+    #   visualization.add_snapshot("Raw ECG", window[:36])
+    if clock_unit.cycle % 10000 == 0:
       print(clock_unit)
+  
+  visualization = DataVisualizer()
+  
+  raw_trace = stitch_windows(scheduler.dispatched_windows, sample_queue.hop_size)
+  derivative_trace = stitch_windows(derivative_unit.history, sample_queue.hop_size)
+  squared_trace = stitch_windows(squaring_unit.history, sample_queue.hop_size)
+
+  visualization.add_snapshot("Raw ECG", raw_trace)
+  visualization.add_snapshot("Derivative", derivative_trace)
+  visualization.add_snapshot("Squared", squared_trace)
+
+  print(f"Processed windows: {len(sink.results)}")
 
   visualization.plot(title=f"Patient {patient_number} Signal Flow")
 
+  print(clock_unit)
   print(data_uploader)
   print(sample_queue)
+  print(scheduler)
+  print(derivative_unit)
+  print(squaring_unit)
+  print(sink)

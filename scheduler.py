@@ -14,6 +14,8 @@ class Scheduler(HardwareUnit):
     self.dispatched_window_count: int = 0
     self.stalled: bool = False
 
+    self.dispatched_windows: list[list[float]] = [] # storage for saving windows for visualization
+
   # If a window is full and a lane is free, dispatch window, else, stall
   def tick(self, current_cycle: int) -> None:
     self.current_cycle = current_cycle
@@ -30,6 +32,7 @@ class Scheduler(HardwareUnit):
       return
 
     window = self.sample_queue.get_window()
+    self.dispatched_windows.append(list(window)) # saving windows to storage for visualization
     free_lane.input_data = window
     self.dispatched_window_count += 1
 
