@@ -12,17 +12,12 @@ class DataUploader(HardwareUnit):
     self.samples = samples
     self.sample_index: int = 0
     self.total_samples: int = len(self.samples)
-    self.active: bool = True
 
   # Push one sample per tick into the SampleQueue
   def tick(self, current_cycle: int) -> None:
     self.current_cycle = current_cycle
 
-    if not self.active:
-      return
-
-    if self.sample_index >= self.total_samples:
-      self.active = False
+    if not self.is_available:
       return
 
     if not self.output_data:
@@ -31,17 +26,17 @@ class DataUploader(HardwareUnit):
 
     self.push_output()
   
-  def push_output(self) -> None:
-    if self.next_unit and self.next_unit.is_available():
-      self.next_unit.input_data = self.output_data
-      self.output_data = []
+  # def push_output(self) -> None:
+  #   if self.next_unit and self.next_unit.is_available():
+  #     self.next_unit.input_data = self.output_data
+  #     self.output_data = []
 
   # Unused
   def compute(self, data: list) -> list:
     return data
 
   def is_available(self) -> bool:
-    return self.active
+    return self.sample_index < self.total_samples
 
   def __repr__(self) -> str:
-    return f"<DataUploader name={self.name} index={self.sample_index}/{self.total_samples} active={self.active}>"
+    return f"<DataUploader name={self.name} index={self.sample_index}/{self.total_samples}>"

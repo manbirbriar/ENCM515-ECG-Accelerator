@@ -47,7 +47,7 @@ class HardwareUnit(ABC):
     if self.next_unit is None:
       return
 
-    if not self.next_unit.busy and not self.next_unit.input_data:
+    if self.next_unit.is_available():
       self.next_unit.input_data = self.output_data
       self.output_data = []
 
