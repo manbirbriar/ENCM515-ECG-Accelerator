@@ -29,6 +29,7 @@ class ClockUnit:
     for unit in reversed(self.units):
       unit.tick(self.cycle)
 
+    # self.stalled_cycles += sum(1 for unit in self.units if unit.is_stalled())
     if any(unit.is_stalled() for unit in self.units):
       self.stalled_cycles += 1
 

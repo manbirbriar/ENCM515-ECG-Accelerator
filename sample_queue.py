@@ -20,15 +20,15 @@ class SampleQueue(HardwareUnit):
 
   # Called by DataUploader each tick to write one sample into the queue
   # If the queue is full, the sample is dropped and stalled is set
-  def receive_sample(self, sample: float) -> None:
-    if self.sample_count >= self.queue_size:
-      self.stalled = True
-      return
+  # def receive_sample(self, sample: float) -> None:
+  #   if self.sample_count >= self.queue_size:
+  #     self.stalled = True
+  #     return
 
-    self.queue[self.write_ptr] = sample
-    self.write_ptr = (self.write_ptr + 1) % self.queue_size
-    self.sample_count += 1
-    self.stalled = False
+  #   self.queue[self.write_ptr] = sample
+  #   self.write_ptr = (self.write_ptr + 1) % self.queue_size
+  #   self.sample_count += 1
+  #   self.stalled = False
 
   # True when enough samples have accumulated to dispatch a full window
   def window_ready(self) -> bool:
@@ -54,6 +54,17 @@ class SampleQueue(HardwareUnit):
   # Tick is implemented only to satisfy ClockUnit registration and to clear the stall flag if space has freed up
   def tick(self, current_cycle: int) -> None:
     self.current_cycle = current_cycle
+
+    if self.input_data:
+      sample = self.input_data[0]
+      self.input_data = []
+      # execute the receive_sample logic inline
+      if self.sample_count < self.queue_size:
+        self.queue[self.write_ptr] = sample
+        self.write_ptr = (self.write_ptr + 1) % self.queue_size
+        self.sample_count += 1
+
+
     if self.sample_count < self.queue_size:
       self.stalled = False
 

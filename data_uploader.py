@@ -25,11 +25,16 @@ class DataUploader(HardwareUnit):
       self.active = False
       return
 
-    # next_unit is expected to be the SampleQueue
-    if self.next_unit and self.next_unit.is_available():
-      sample = self.samples[self.sample_index]
-      self.next_unit.receive_sample(sample)
+    if not self.output_data:
+      self.output_data = self.samples[self.sample_index]
       self.sample_index += 1
+
+    self.push_output()
+  
+  def push_output(self) -> None:
+    if self.next_unit and self.next_unit.is_available():
+      self.next_unit.input_data = self.output_data
+      self.output_data = []
 
   # Unused
   def compute(self, data: list) -> list:
