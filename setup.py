@@ -50,14 +50,29 @@ if __name__ == "__main__":
   data_uploader = DataUploader("data_uploader", float_samples)
   data_uploader.connect(sample_queue)
 
+
   derivative_unit = DerivativeUnit("derivative_unit", latency_cycles=2)
   squaring_unit = SquaringUnit("squaring_unit", latency_cycles=1)
   sink = ResultSink("sink")
 
-  derivative_unit.connect(squaring_unit)
-  squaring_unit.connect(sink)
+  derivative_unit2 = DerivativeUnit("derivative_unit", latency_cycles=2)
+  squaring_unit2 = SquaringUnit("squaring_unit", latency_cycles=1)
+  sink2 = ResultSink("sink")
 
-  scheduler = Scheduler("scheduler", sample_queue, lanes=[derivative_unit])
+  derivative_unit3 = DerivativeUnit("derivative_unit", latency_cycles=2)
+  squaring_unit3 = SquaringUnit("squaring_unit", latency_cycles=1)
+  sink3 = ResultSink("sink")
+
+  derivative_unit4 = DerivativeUnit("derivative_unit", latency_cycles=2)
+  squaring_unit4 = SquaringUnit("squaring_unit", latency_cycles=1)
+  sink4 = ResultSink("sink")
+
+  derivative_unit.connect(squaring_unit).connect(sink)
+  derivative_unit2.connect(squaring_unit2).connect(sink2)
+  derivative_unit3.connect(squaring_unit3).connect(sink3)
+  derivative_unit4.connect(squaring_unit4).connect(sink4)
+
+  scheduler = Scheduler("scheduler", sample_queue, lanes=[derivative_unit, derivative_unit2, derivative_unit3, derivative_unit4])
 
   clock_unit = ClockUnit()
   clock_unit.subscribe_many([sample_queue, data_uploader, scheduler, derivative_unit, squaring_unit, sink])
