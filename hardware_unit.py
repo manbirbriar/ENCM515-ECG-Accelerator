@@ -23,6 +23,7 @@ class HardwareUnit(ABC):
     return next_unit
 
   # Used to ensure that each unit only does 1 clock cycle of work per cycle
+  # TODO: Check for edge cases
   def tick(self, current_cycle: int) -> None:
     self.current_cycle = current_cycle
 
@@ -37,9 +38,6 @@ class HardwareUnit(ABC):
         self.input_data = []
         self.busy = False
         self.push_output()
-
-    elif self.output_data:
-      self.push_output()
 
   def start_work(self) -> None:
     self.busy = True
