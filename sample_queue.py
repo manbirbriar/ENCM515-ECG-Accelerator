@@ -2,11 +2,7 @@ from hardware_unit import HardwareUnit
 import numpy as np
 
 class SampleQueue(HardwareUnit):
-  # MIT-BIH dataset sample rate is 360Hz
-  # TODO: I've gone with a 0.2s wide window, but I cannot justify it
-  # window_size = 360 samples/s * 0.2s = 72 samples
-  # TODO: Not sure how large the queue_size should be
-  def __init__(self, name: str, queue_size: int, window_size: int = 72, hop_size: int = 36):
+  def __init__(self, name: str, queue_size: int, window_size: int, hop_size: int):
     super().__init__(name, latency_cycles=1)
 
     self.queue_size: int = queue_size
@@ -18,6 +14,8 @@ class SampleQueue(HardwareUnit):
     self.sample_count: int = 0
     self.stalled: bool = False
 
+    self.sample_id: int = 0
+
   # Called by DataUploader each tick to write one sample into the queue
   # If the queue is full, the sample is dropped and stalled is set
   def receive_sample(self, sample: float) -> None:
@@ -28,6 +26,7 @@ class SampleQueue(HardwareUnit):
     self.queue[self.write_ptr] = sample
     self.write_ptr = (self.write_ptr + 1) % self.queue_size
     self.sample_count += 1
+    self.sample_id += 1
     self.stalled = False
 
   # True when enough samples have accumulated to dispatch a full window
@@ -45,7 +44,7 @@ class SampleQueue(HardwareUnit):
     for i in range(self.window_size):
       window.append(float(self.queue[(read_ptr + i) % self.queue_size]))
 
-    # Advance by 36 samples (50% overlap) to ensure R-peaks falling on window boundaries are fully captured in the subsequent frame
+    # Advance by 50% overlap to ensure R-peaks falling on window boundaries are fully captured in the subsequent frame
     # TODO: I'm not 100% sure on this, but I am convincing myself that it makes sense
     self.sample_count -= self.hop_size
     return window
@@ -67,6 +66,9 @@ class SampleQueue(HardwareUnit):
 
   def is_stalled(self) -> bool:
     return self.stalled
+
+  def is_empty(self) -> bool:
+    return self.queue_size == 0
 
   def __repr__(self) -> str:
     return f"<SampleQueue name={self.name} count={self.sample_count}/{self.queue_size} window_ready={self.window_ready()} stalled={self.stalled}>"

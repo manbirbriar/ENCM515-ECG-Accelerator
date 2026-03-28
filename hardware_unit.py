@@ -1,6 +1,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
+from data_recorder import DataRecorder
 
 class HardwareUnit(ABC):
   def __init__(self, name: str, latency_cycles: int = 1):
@@ -14,6 +15,7 @@ class HardwareUnit(ABC):
     self.cycles_remaining: int = 0
 
     self.next_unit: HardwareUnit | None = None
+    self.recorder: DataRecorder | None = None
 
   # Wires this unit's output to next_unit
   def connect(self, next_unit: HardwareUnit) -> HardwareUnit:
@@ -43,7 +45,13 @@ class HardwareUnit(ABC):
     self.busy = True
     self.cycles_remaining = self.latency_cycles
 
+  def attach_recorder(self, recorder: DataRecorder) -> None:
+    self.recorder = recorder
+
   def push_output(self) -> None:
+    if self.recorder and self.output_data:
+      self.recorder.record(self.output_data)
+
     if self.next_unit is None:
       return
 

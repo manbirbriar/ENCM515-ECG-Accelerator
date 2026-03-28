@@ -37,6 +37,10 @@ class DataUploader(HardwareUnit):
 
   def is_available(self) -> bool:
     return self.active
+  
+  # used to check if data has finished uploading
+  def is_done(self) -> bool:
+    return self.sample_index >= len(self.samples)
 
   def __repr__(self) -> str:
     return f"<DataUploader name={self.name} index={self.sample_index}/{self.total_samples} active={self.active}>"
