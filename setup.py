@@ -9,26 +9,16 @@ from derivative_unit import DerivativeUnit
 from squaring_unit import SquaringUnit
 from data_recorder import DataRecorder
 from low_pass_unit import LowPassUnit
-from config import FIXED_POINT_SCALE, WINDOW_SIZE, HOP_SIZE, QUEUE_SIZE, DATA_RECORDER_CAPACITY, SAMPLE_RATE
+from config import FIXED_POINT_SCALE, WINDOW_SIZE, HOP_SIZE, QUEUE_SIZE, DATA_RECORDER_CAPACITY, SAMPLE_RATE, VECTOR_WIDTH, MWI_WINDOW_SIZE
 import matplotlib.pyplot as plt
 from high_pass_unit import HighPassUnit
 from threshold_unit import ThresholdUnit
 
-def get_reference_bpm(record_path, start_sample, end_sample):
-  # 1. Load the 'atr' (attribute) file
-  # This contains the indices of every heartbeat marked by a cardiologist
-  annotation = wfdb.rdann(record_path, 'atr', sampfrom=start_sample, sampto=end_sample)
-  
-  # 2. Filter for actual 'beat' symbols (N, L, R, B, A, a, J, S, V, r, F, e, j, n, E, f, /)
-  # Some annotations are just 'comments' or 'noise' markers, not heartbeats
-  beat_symbols = ['N', 'L', 'R', 'B', 'A', 'a', 'J', 'S', 'V', 'r', 'F', 'e', 'j', 'n', 'E', 'f', '/']
-  true_beats = [s for s in annotation.symbol if s in beat_symbols]
-  
-  num_beats = len(true_beats)
-  duration_seconds = (end_sample - start_sample) / 360.0
-  
-  ref_bpm = (num_beats / duration_seconds) * 60
-  return ref_bpm
+# TODO: Confirm that these are correct
+def get_patient_bpm(patient_number):
+  # https://www.researchgate.net/figure/Heart-rates-of-patients-from-the-MIT-BIH-Arrhythmia-Database_tbl4_371898998
+  patient_bpms = {100: 76, 101: 62, 102: 73, 103: 70, 104: 77, 105: 90, 106: 70, 107: 71, 108: 61, 109: 85}
+  return patient_bpms[patient_number]
 
 # TODO: Confirm that this is working correctly
 def load_float_samples(record_path: str, channel: int = 0) -> np.ndarray:
@@ -43,16 +33,15 @@ def load_fixed_samples(record_path: str, channel: int = 0) -> np.ndarray:
   normalised = raw / np.max(np.abs(raw))
   return (normalised * FIXED_POINT_SCALE).astype(np.int16)
 
-# TODO: This is temporary (AI)
-def plot_data_recorders(recorders: list[DataRecorder], sample_rate: int, patient_number: int) -> None:
+def plot_data_recorders(recorders: list[DataRecorder], patient_number: int) -> None:
   n = len(recorders)
 
   fig, axes = plt.subplots(n, 1, figsize=(12, 3 * n), sharex=True)
 
   for ax, recorder in zip(axes, recorders):
     signal = recorder.get_signal()
-    time = [i / sample_rate for i in range(len(signal))]
-    ax.plot(time, signal, linewidth=0.8)
+    indices = np.arange(len(signal))
+    ax.plot(indices, signal)
     ax.set_title(recorder.name)
     ax.set_ylabel("Amplitude")
     ax.grid(True, alpha=0.3)
@@ -85,20 +74,19 @@ if __name__ == "__main__":
   data_uploader = DataUploader("data_uploader", float_samples)
   data_uploader.connect(sample_queue)
 
-  # TODO: Assign accurate latency values
-  low_pass_unit = LowPassUnit("low_pass_unit")
+  low_pass_unit = LowPassUnit("low_pass_unit", window_size=WINDOW_SIZE, vector_width=VECTOR_WIDTH)
   low_pass_unit.attach_recorder(low_pass_data_recorder)
 
-  high_pass_unit = HighPassUnit("high_pass_unit")
+  high_pass_unit = HighPassUnit("high_pass_unit", window_size=WINDOW_SIZE, vector_width=VECTOR_WIDTH)
   high_pass_unit.attach_recorder(high_pass_data_recorder)
   
-  derivative_unit = DerivativeUnit("derivative_unit")
+  derivative_unit = DerivativeUnit("derivative_unit", window_size=WINDOW_SIZE, vector_width=VECTOR_WIDTH)
   derivative_unit.attach_recorder(derivative_data_recorder)
   
-  squaring_unit = SquaringUnit("squaring_unit")
+  squaring_unit = SquaringUnit("squaring_unit", window_size=WINDOW_SIZE, vector_width=VECTOR_WIDTH)
   squaring_unit.attach_recorder(squaring_data_recorder)
 
-  mwi_unit = MWIUnit("mwi_unit")
+  mwi_unit = MWIUnit("mwi_unit", window_size=WINDOW_SIZE, vector_width=VECTOR_WIDTH, mwi_window_size=MWI_WINDOW_SIZE)
   mwi_unit.attach_recorder(mwi_data_recorder)
 
   threshold_unit = ThresholdUnit("threshold_unit")
@@ -113,17 +101,17 @@ if __name__ == "__main__":
   clock_unit = ClockUnit()
   clock_unit.subscribe_many(units)
 
-  # TODO: this 
-  for _ in range(1500000):
+  # TODO: Should stop running when all samples are processed
+  for _ in range(1000000):
     clock_unit.tick()
 
     if clock_unit.cycle % 100000 == 0:
       print(clock_unit)
 
-  plot_data_recorders(data_recorders, sample_rate=SAMPLE_RATE, patient_number=patient_number)
+  plot_data_recorders(data_recorders, patient_number=patient_number)
 
   print(f"Calculated BPM = {threshold_unit.get_bpm()}")
-  print(f"Actual BPM = {get_reference_bpm(record_path, 0, 4140)}")
+  print(f"Actual BPM = {get_patient_bpm(patient_number)}")
 
   print(clock_unit)
   print(data_uploader)
@@ -135,3 +123,14 @@ if __name__ == "__main__":
   print(squaring_unit)
   print(mwi_unit)
   print(threshold_unit)
+
+  # Confirm that the load_float_samples and load_fixed_samples load data as fixed and float.
+  # The latency of the pipeline units (low pass, high pass, derivative, squaring, window, and threshold) should change based on fixed and floating point samples.
+  # Confirm that the threshold unit is valid. It most likely is since we get the right BPM, but look it over nonetheless.
+  # Confirm that the moving window integration unit is valid. It most likely is since we get the right BPM, but look it over nonetheless.
+  # Confirm that each of the pipeline units is using some form of parallelization (if possible).
+  # Remove the lane functionality from the scheduler (we only have 1 lane now).
+  # There is no overlap between windows anymore. AI told me that this was neccessary, but from what I can tell, we are calculating the BPM correctly so I see no point in adding more complexity. Find a reason for this.
+  # Look into how we can analyze throughput vs battery life.
+  # It seems like the data being plotted is slightly offset from other pipeline stages. Confirm if this is ok.
+  # Figure out the issue with the large number of stalled cycles.

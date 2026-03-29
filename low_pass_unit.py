@@ -1,21 +1,23 @@
 import numpy as np
 from hardware_unit import HardwareUnit
-
 class LowPassUnit(HardwareUnit):
 
-  def __init__(self, name: str, vector_width: int = 4):
-    # TODO: Confirm this number is correct
-    # 18 FIR SIMD cycles + 72 IIR cycles = 90 cycles
-    latency = (72 // vector_width) + 72
+  def __init__(self, name: str, window_size: int, vector_width: int):
+    # Latency Model (shifts treated as free):
+    #   FIR (x[n] - 2x[n-6] + x[n-12]): 2 ops (sub, add) per sample
+    #   IIR (2y[n-1] - y[n-2] + part_a): 2 ops (sub, add for part_a) per sample
+    fir_cycles = (2 * window_size) // vector_width
+    iir_cycles = 2 * window_size
+    latency = fir_cycles + iir_cycles
 
     super().__init__(name, latency_cycles=latency)
     
     self.vector_width = vector_width
 
     # internal registers
-    self.y_1 = 0.0 # most recent output y[n-1]
-    self.y_2 = 0.0 # second most recent output y[n-2]
-    self.x_history = np.zeros(12) # previous inputs x[n-12]
+    self.y_1 = 0.0 # most recently computed: y[n-1]
+    self.y_2 = 0.0 # second most recently computed: y[n-2]
+    self.x_history = np.zeros(12) # 12 previous window samples: x[n-12]
 
   # y[n] = 2y[n-1] - y[n-2] + x[n] - 2x[n-6] + x[n-12]
   def compute(self, data: list) -> list:
@@ -27,7 +29,8 @@ class LowPassUnit(HardwareUnit):
 
     results = []
     for i in range(len(part_a)):
-        
+      
+      # y[n] = 2y[n-1] - y[n-2] + part_a
       y_n = (2 * self.y_1) - self.y_2 + part_a[i]
       
       self.y_2 = self.y_1

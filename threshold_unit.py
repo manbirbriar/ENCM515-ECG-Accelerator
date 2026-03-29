@@ -1,32 +1,29 @@
 import numpy as np
 from hardware_unit import HardwareUnit
+from config import SAMPLE_RATE, WINDOW_SIZE
 
 # TODO: This is temporary (AI)
 class ThresholdUnit(HardwareUnit):
-  def __init__(self, name: str, sample_rate: int = 360):
+  def __init__(self, name: str):
     super().__init__(name, latency_cycles=1)
-    self.sample_rate = sample_rate
+    self.sample_rate = SAMPLE_RATE
     
-    # --- PRE-SEED VALUES ---
     # Prevents 'Cold Start' where threshold stays at 0
     self.spki = 2.0  # Signal Peak Estimate
     self.npki = 0.5  # Noise Peak Estimate
-    self.threshold = 1.0 
+    self.threshold = 1.0
     
-    # --- INTERNAL TIMELINE ---
-    self.sample_count = 0 
+    self.sample_count = 0
     self.peaks = []  # Stores the sample_count of each detection
     self.last_peak_sample = -500 # Ensure we can detect the very first beat
 
   def compute(self, data: list) -> list:
-    # 1. Increment our internal timeline
-    # 'data' is usually your HOP_SIZE or WINDOW_SIZE
     num_samples = len(data)
     current_max = np.max(data)
     
-    # 2. Check for Heartbeat
     # 360Hz * 0.2s = 72 samples (Refractory Period/Cooldown)
     if current_max > self.threshold and (self.sample_count - self.last_peak_sample) > 72:
+    # if current_max > self.threshold and (self.sample_count - self.last_peak_sample) > WINDOW_SIZE:
       self.peaks.append(self.sample_count)
       self.last_peak_sample = self.sample_count
       

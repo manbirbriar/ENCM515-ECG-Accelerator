@@ -3,25 +3,26 @@ from hardware_unit import HardwareUnit
 
 class DerivativeUnit(HardwareUnit):
 
-  def __init__(self, name: str, vector_width: int = 4):
-    # TODO: Confirm this number is correct
-    # 72 // 4 = 18 cycles
-    latency = (72 // vector_width)
+  def __init__(self, name: str, window_size: int, vector_width: int):
+    # Latency Model (shifts treated as free):
+    #   FIR ((1/8) * [2x[n] + x[n-1] - x[n-3] - 2x[n-4]]): 3 ops (add, sub, sub) per sample
+    fir_cycles = (3 * window_size) // vector_width
+    latency = fir_cycles
 
     super().__init__(name, latency_cycles=latency)
     
+    self.window_size = window_size
     self.vector_width = vector_width
 
     # internal registers
-    self.x_history = np.zeros(4) # previous inputs x[n-4]
+    self.x_history = np.zeros(4) # 4 previous window samples: x[n-4]
 
   # y[n] = (1/8) * [2x[n] + x[n-1] - x[n-3] - 2x[n-4]]
   def compute(self, data: list) -> list:
     x_current = np.array(data)
     x_extended = np.concatenate([self.x_history, x_current])
     
-    # 4 ALUs calculating slopes simultaneously
-    results = (1/8) * (2 * x_extended[4:] + x_extended[3:-1] - x_extended[1:-3] - 2 * x_extended[:72])
+    results = (1/8) * (2 * x_extended[4:] + x_extended[3:-1] - x_extended[1:-3] - 2 * x_extended[:self.window_size])
 
     self.x_history = x_current[-4:]
     

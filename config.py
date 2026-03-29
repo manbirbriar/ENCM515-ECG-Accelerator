@@ -1,17 +1,23 @@
 # TODO: Confirm that this is valid
 FIXED_POINT_SCALE = 2**15 - 1
 
-SAMPLE_RATE = 360
-
 # MIT-BIH dataset sample rate is 360Hz
-# TODO: I've gone with a 0.2s wide window, but I cannot justify it
-# window_size = 360 samples/s * 0.2s = 72 samples
-WINDOW_SIZE: int = 72 # 360 * 0.2s
+SAMPLE_RATE: int = 360
 
-# TODO: Find out why 36 was giving bad results
-HOP_SIZE: int = 72 # 50% overlap
+# QRS complex typically lasts between 80ms - 120ms
+# Use 150ms ensure the entire complex is captured
+# MWI_WINDOW_SIZE = 0.15s * 360 samples/s
+# MWI_WINDOW_SIZE: int = 0.15 * SAMPLE_RATE
+MWI_WINDOW_SIZE: int = 54
+
+WINDOW_SIZE: int = 72
+# WINDOW_SIZE: int = SAMPLE_RATE * 0.2
+
+HOP_SIZE: int = WINDOW_SIZE
 
 # TODO: Not sure how large the queue_size should be
 QUEUE_SIZE: int = 512
 
-DATA_RECORDER_CAPACITY: int = 5000
+DATA_RECORDER_CAPACITY: int = 2500
+
+VECTOR_WIDTH: int = 4

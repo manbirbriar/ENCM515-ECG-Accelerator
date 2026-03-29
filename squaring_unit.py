@@ -3,9 +3,11 @@ from hardware_unit import HardwareUnit
 
 class SquaringUnit(HardwareUnit):
 
-  def __init__(self, name: str, vector_width: int = 4):
-    # 72 // 4 = 18 cycles
-    latency = (72 // vector_width)
+  def __init__(self, name: str, window_size: int, vector_width: int):
+    # Latency Model (shifts treated as free):
+    #   FIR (x[n]^2): 1 op (mul) per sample
+    fir_cycles = (1 * window_size) // vector_width
+    latency = fir_cycles
 
     super().__init__(name, latency_cycles=latency)
     
@@ -15,7 +17,6 @@ class SquaringUnit(HardwareUnit):
   def compute(self, data: list) -> list:
     x_current = np.array(data)
     
-    # 4 ALUs squaring 4 samples at once
     results = np.square(x_current)
 
     return results.tolist()
