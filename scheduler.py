@@ -1,6 +1,5 @@
 from hardware_unit import HardwareUnit
 from sample_queue import SampleQueue
-from config import HOP_SIZE
 
 # For each tick, if a full window is ready and at least one lane is free,
 # the scheduler extracts the window from the buffer and sends it to the first available lane
@@ -55,4 +54,4 @@ class Scheduler(HardwareUnit):
     return self.stalled
 
   def __repr__(self) -> str:
-    return f"<Scheduler name={self.name} dispatched={self.dispatched_window_count} stall_count={self.stall_count} stalled_this_cycle={self.stalled}>"
+    return f"<Scheduler name={self.name} dispatched={self.dispatched_window_count} stall_count={self.stall_count}>"

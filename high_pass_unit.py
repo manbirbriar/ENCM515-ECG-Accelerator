@@ -4,10 +4,15 @@ from hardware_unit import HardwareUnit
 class HighPassUnit(HardwareUnit):
 
   def __init__(self, name: str, window_size: int, vector_width: int):
-    # Latency Model (shifts treated as free):
-    #   FIR (-(1/32)x[n] + x[n-16] - x[n-17] + (1/32)x[n-32]): 3 ops (add, sub, add) per sample
-    #   IIR (y[n-1] + part_a): 1 op (add) per sample
+
+    # 1. FIR Stage: (-(1/32)x[n] + x[n-16] - x[n-17] + (1/32)x[n-32])
+    #    - Exploit DLP: We emulate SIMD vectorization where "vector_width" samples are processed in parallel.
+    #    - Cost: 3 ops (sub, add, add) per sample. (1/32)* is a "free" bit-shift.
     fir_cycles = (3 * window_size) // vector_width
+
+    # 2. IIR Stage: (y[n-1] + part_a)
+    #    - Sequential Bottleneck: y[n] has a dependency on y[n-1].
+    #    - Cost: 1 op (add) per sample.
     iir_cycles = 1 * window_size
     latency = fir_cycles + iir_cycles
 
@@ -17,8 +22,8 @@ class HighPassUnit(HardwareUnit):
     self.vector_width = vector_width
 
     # internal registers
-    self.y_1 = 0.0 # most recent output y[n-1]
-    self.x_history = np.zeros(32) # previous inputs x[n-32]
+    self.y_1 = 0.0 # y[n-1]
+    self.x_history = np.zeros(32) # x[n-32]
 
   # y[n] = y[n-1] - (1/32)x[n] + x[n-16] - x[n-17] + (1/32)x[n-32]
   def compute(self, data: list) -> list:

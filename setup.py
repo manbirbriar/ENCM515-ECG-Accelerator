@@ -89,7 +89,7 @@ if __name__ == "__main__":
   mwi_unit = MWIUnit("mwi_unit", window_size=WINDOW_SIZE, vector_width=VECTOR_WIDTH, mwi_window_size=MWI_WINDOW_SIZE)
   mwi_unit.attach_recorder(mwi_data_recorder)
 
-  threshold_unit = ThresholdUnit("threshold_unit")
+  threshold_unit = ThresholdUnit("threshold_unit", window_size=WINDOW_SIZE, sample_rate=SAMPLE_RATE)
   threshold_unit.attach_recorder(threshold_data_recorder)
   
   low_pass_unit.connect(high_pass_unit).connect(derivative_unit).connect(squaring_unit).connect(mwi_unit).connect(threshold_unit)

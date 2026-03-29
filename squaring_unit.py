@@ -4,8 +4,9 @@ from hardware_unit import HardwareUnit
 class SquaringUnit(HardwareUnit):
 
   def __init__(self, name: str, window_size: int, vector_width: int):
-    # Latency Model (shifts treated as free):
-    #   FIR (x[n]^2): 1 op (mul) per sample
+    # 1. FIR Stage: x[n]^2
+    #    - Exploit DLP: We emulate SIMD vectorization where "vector_width" samples are processed in parallel.
+    #    - Cost: 1 op (mul) per sample.
     fir_cycles = (1 * window_size) // vector_width
     latency = fir_cycles
 

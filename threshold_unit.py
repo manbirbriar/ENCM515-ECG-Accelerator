@@ -1,12 +1,11 @@
 import numpy as np
 from hardware_unit import HardwareUnit
-from config import SAMPLE_RATE, WINDOW_SIZE
 
-# TODO: This is temporary (AI)
 class ThresholdUnit(HardwareUnit):
-  def __init__(self, name: str):
+  def __init__(self, name: str, window_size: int, sample_rate: int):
     super().__init__(name, latency_cycles=1)
-    self.sample_rate = SAMPLE_RATE
+    self.window_size = window_size
+    self.sample_rate = sample_rate
     
     # Prevents 'Cold Start' where threshold stays at 0
     self.spki = 2.0  # Signal Peak Estimate
@@ -22,8 +21,7 @@ class ThresholdUnit(HardwareUnit):
     current_max = np.max(data)
     
     # 360Hz * 0.2s = 72 samples (Refractory Period/Cooldown)
-    if current_max > self.threshold and (self.sample_count - self.last_peak_sample) > 72:
-    # if current_max > self.threshold and (self.sample_count - self.last_peak_sample) > WINDOW_SIZE:
+    if current_max > self.threshold and (self.sample_count - self.last_peak_sample) > self.window_size:
       self.peaks.append(self.sample_count)
       self.last_peak_sample = self.sample_count
       

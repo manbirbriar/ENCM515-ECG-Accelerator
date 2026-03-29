@@ -4,8 +4,9 @@ from hardware_unit import HardwareUnit
 class DerivativeUnit(HardwareUnit):
 
   def __init__(self, name: str, window_size: int, vector_width: int):
-    # Latency Model (shifts treated as free):
-    #   FIR ((1/8) * [2x[n] + x[n-1] - x[n-3] - 2x[n-4]]): 3 ops (add, sub, sub) per sample
+    # 1. FIR Stage: (1/8) * [2x[n] + x[n-1] - x[n-3] - 2x[n-4]]
+    #    - Exploit DLP: We emulate SIMD vectorization where "vector_width" samples are processed in parallel.
+    #    - Cost: 3 ops (add, sub, sub) per sample. (1/8)* is a "free" bit-shift.
     fir_cycles = (3 * window_size) // vector_width
     latency = fir_cycles
 
@@ -15,7 +16,7 @@ class DerivativeUnit(HardwareUnit):
     self.vector_width = vector_width
 
     # internal registers
-    self.x_history = np.zeros(4) # 4 previous window samples: x[n-4]
+    self.x_history = np.zeros(4) # x[n-4]
 
   # y[n] = (1/8) * [2x[n] + x[n-1] - x[n-3] - 2x[n-4]]
   def compute(self, data: list) -> list:

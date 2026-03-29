@@ -3,11 +3,16 @@ from hardware_unit import HardwareUnit
 class LowPassUnit(HardwareUnit):
 
   def __init__(self, name: str, window_size: int, vector_width: int):
-    # Latency Model (shifts treated as free):
-    #   FIR (x[n] - 2x[n-6] + x[n-12]): 2 ops (sub, add) per sample
-    #   IIR (2y[n-1] - y[n-2] + part_a): 2 ops (sub, add for part_a) per sample
+    # 1. FIR Stage: (x[n] - 2x[n-6] + x[n-12])
+    #    - Exploit DLP: We emulate SIMD vectorization where "vector_width" samples are processed in parallel.
+    #    - Cost: 2 ops (sub, add) per sample. 2* is a "free" bit-shift.
     fir_cycles = (2 * window_size) // vector_width
+
+    # 2. IIR Stage: (2y[n-1] - y[n-2] + part_a)
+    #    - Sequential Bottleneck: y[n] has a dependency on y[n-1] and y[n-2].
+    #    - Cost: 2 ops (sub, add) per sample. 2* is a "free" bit-shift.
     iir_cycles = 2 * window_size
+
     latency = fir_cycles + iir_cycles
 
     super().__init__(name, latency_cycles=latency)
@@ -15,9 +20,9 @@ class LowPassUnit(HardwareUnit):
     self.vector_width = vector_width
 
     # internal registers
-    self.y_1 = 0.0 # most recently computed: y[n-1]
-    self.y_2 = 0.0 # second most recently computed: y[n-2]
-    self.x_history = np.zeros(12) # 12 previous window samples: x[n-12]
+    self.y_1 = 0.0 # y[n-1]
+    self.y_2 = 0.0 # y[n-2]
+    self.x_history = np.zeros(12) # x[n-12]
 
   # y[n] = 2y[n-1] - y[n-2] + x[n] - 2x[n-6] + x[n-12]
   def compute(self, data: list) -> list:
