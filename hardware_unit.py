@@ -24,7 +24,7 @@ class HardwareUnit(ABC):
     self.next_unit = next_unit
     return next_unit
 
-  def tick(self) -> None:
+  def tick(self, current_cycle: int) -> None:
     if self.output_data:
       self.handoff_to_next()
 

@@ -22,7 +22,7 @@ class SquaringUnit(HardwareUnit):
     if self.is_fixed_point:
       # int64 to prevent overflow
       # y[n] = x[n]^2 >> 15
-      results = (x_current.astype(np.int64)**2) >> FIXED_POINT_BITS
+      results = ((x_current.astype(np.int64)**2) >> FIXED_POINT_BITS).astype(np.int32)
     else:
       # y[n] = x[n]^2
       results = np.square(x_current)
