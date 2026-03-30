@@ -1,22 +1,29 @@
 import numpy as np
 from hardware_unit import HardwareUnit
 class LowPassUnit(HardwareUnit):
-
+  
+  # TODO: float and fixed operation values are incorrect
   def __init__(self, name: str, window_size: int, vector_width: int, is_fixed_point: bool):
     # 1. FIR Stage: (x[n] - 2x[n-6] + x[n-12])
     #    - Exploit DLP: We emulate SIMD vectorization where "vector_width" samples are processed in parallel.
     #    - Cost: 2 ops (sub, add) per sample. 2* is a "free" bit-shift.
-    fir_cycles = (2 * window_size) // vector_width
+    fir_float_cycles = (2 * window_size) // vector_width
+    fir_fixed_cycles = (2 * window_size) // vector_width
 
     # 2. IIR Stage: (2y[n-1] - y[n-2] + part_a)
     #    - Sequential Bottleneck: y[n] has a dependency on y[n-1] and y[n-2].
     #    - Cost: 2 ops (sub, add) per sample. 2* is a "free" bit-shift.
     # iir_cycles = 2 * window_size
-    iir_cycles = window_size
+    iir_float_cycles = window_size * 6
+    iir_fixed_cycles = window_size * 1
 
-    latency = fir_cycles + iir_cycles
+    fixed_latency = fir_fixed_cycles + iir_fixed_cycles
+    float_latency = fir_float_cycles + iir_float_cycles
 
-    super().__init__(name, latency_cycles=latency, is_fixed_point=is_fixed_point)
+    if is_fixed_point:
+      super().__init__(name, latency_cycles=fixed_latency, is_fixed_point=is_fixed_point)
+    else:
+      super().__init__(name, latency_cycles=float_latency, is_fixed_point=is_fixed_point)
     
     self.vector_width = vector_width
 
