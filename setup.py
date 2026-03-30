@@ -14,24 +14,21 @@ import matplotlib.pyplot as plt
 from high_pass_unit import HighPassUnit
 from threshold_unit import ThresholdUnit
 
-# TODO: Confirm that these are correct
-def get_patient_bpm(patient_number):
-  # https://www.researchgate.net/figure/Heart-rates-of-patients-from-the-MIT-BIH-Arrhythmia-Database_tbl4_371898998
-  patient_bpms = {100: 76, 101: 62, 102: 73, 103: 70, 104: 77, 105: 90, 106: 70, 107: 71, 108: 61, 109: 85}
-  return patient_bpms[patient_number]
+def get_patient_bpm(patient_number, data_dir="ecg_data"):
+  record_path = f"{data_dir}/patient_{patient_number}/{patient_number}"
+  record = wfdb.rdrecord(record_path)
+  annotation = wfdb.rdann(record_path, "atr")
+  
+  r_peaks = annotation.sample[np.isin(annotation.symbol, ["N", "L", "R", "B", "A", "a", "J", "S", "V", "F", "e", "j"])]
+  rr_intervals = np.diff(r_peaks) / record.fs
+  median_bpm = round(60 / np.median(rr_intervals))
+  
+  return median_bpm
 
-# TODO: Confirm that this is working correctly
-def load_float_samples(record_path: str, channel: int = 0) -> np.ndarray:
+def load_data(record_path: str, channel: int = 0):
   record = wfdb.rdrecord(record_path)
   raw = record.p_signal[:, channel]
   return raw.astype(np.float32)
-
-# TODO: Confirm that this is working correctly
-def load_fixed_samples(record_path: str, channel: int = 0) -> np.ndarray:
-  record = wfdb.rdrecord(record_path)
-  raw = record.p_signal[:, channel]
-  normalised = raw / np.max(np.abs(raw))
-  return (normalised * FIXED_POINT_SCALE).astype(np.int16)
 
 def plot_data_recorders(recorders: list[DataRecorder], patient_number: int) -> None:
   n = len(recorders)
@@ -46,20 +43,12 @@ def plot_data_recorders(recorders: list[DataRecorder], patient_number: int) -> N
     ax.set_ylabel("Amplitude")
     ax.grid(True, alpha=0.3)
 
-  axes[-1].set_xlabel("Time (s)")
-  plt.suptitle(f"Patient {patient_number}", fontsize=24, y=0.99)
+  axes[-1].set_xlabel("Sample")
+  plt.suptitle(f"Patient {patient_number}", fontsize=24)
   plt.tight_layout()
   plt.show()
 
-if __name__ == "__main__":
-  # patient_number = input("Enter the patient number (100, 101, or 102): ")
-  patient_number = 102
-
-  record_path = f"ecg_data/patient_{patient_number}/{patient_number}"
-
-  float_samples = load_float_samples(record_path)
-  fixed_samples = load_fixed_samples(record_path)
-
+def run_simulation(patient_samples, is_fixed: bool):
   raw_ecg_data_recorder = DataRecorder("raw_ecg_data_recorder", capacity=DATA_RECORDER_CAPACITY, hop_size=HOP_SIZE)
   low_pass_data_recorder = DataRecorder("low_pass_data_recorder", capacity=DATA_RECORDER_CAPACITY, hop_size=HOP_SIZE)
   high_pass_data_recorder = DataRecorder("high_pass_data_recorder", capacity=DATA_RECORDER_CAPACITY, hop_size=HOP_SIZE)
@@ -68,69 +57,75 @@ if __name__ == "__main__":
   mwi_data_recorder = DataRecorder("mwi_data_recorder", capacity=DATA_RECORDER_CAPACITY, hop_size=HOP_SIZE)
   threshold_data_recorder = DataRecorder("threshold_data_recorder", capacity=DATA_RECORDER_CAPACITY, hop_size=HOP_SIZE)
 
-  data_recorders = [raw_ecg_data_recorder, low_pass_data_recorder, high_pass_data_recorder, derivative_data_recorder, squaring_data_recorder, mwi_data_recorder, threshold_data_recorder]
-
-  sample_queue = SampleQueue("sample_queue", queue_size=QUEUE_SIZE, window_size=WINDOW_SIZE, hop_size=HOP_SIZE)
-  data_uploader = DataUploader("data_uploader", float_samples)
+  sample_queue = SampleQueue("sample_queue", QUEUE_SIZE, WINDOW_SIZE, HOP_SIZE)
+  data_uploader = DataUploader("data_uploader", patient_samples)
   data_uploader.connect(sample_queue)
 
-  low_pass_unit = LowPassUnit("low_pass_unit", window_size=WINDOW_SIZE, vector_width=VECTOR_WIDTH)
+  low_pass_unit = LowPassUnit("low_pass_unit", WINDOW_SIZE, VECTOR_WIDTH, is_fixed_point=is_fixed)
   low_pass_unit.attach_recorder(low_pass_data_recorder)
 
-  high_pass_unit = HighPassUnit("high_pass_unit", window_size=WINDOW_SIZE, vector_width=VECTOR_WIDTH)
+  high_pass_unit = HighPassUnit("high_pass_unit", WINDOW_SIZE, VECTOR_WIDTH, is_fixed_point=is_fixed)
   high_pass_unit.attach_recorder(high_pass_data_recorder)
   
-  derivative_unit = DerivativeUnit("derivative_unit", window_size=WINDOW_SIZE, vector_width=VECTOR_WIDTH)
+  derivative_unit = DerivativeUnit("derivative_unit", WINDOW_SIZE, VECTOR_WIDTH, is_fixed_point=is_fixed)
   derivative_unit.attach_recorder(derivative_data_recorder)
-  
-  squaring_unit = SquaringUnit("squaring_unit", window_size=WINDOW_SIZE, vector_width=VECTOR_WIDTH)
+
+  squaring_unit = SquaringUnit("squaring_unit", WINDOW_SIZE, VECTOR_WIDTH, is_fixed_point=is_fixed)
   squaring_unit.attach_recorder(squaring_data_recorder)
 
-  mwi_unit = MWIUnit("mwi_unit", window_size=WINDOW_SIZE, vector_width=VECTOR_WIDTH, mwi_window_size=MWI_WINDOW_SIZE)
+  mwi_unit = MWIUnit("mwi_unit", WINDOW_SIZE, VECTOR_WIDTH, MWI_WINDOW_SIZE, is_fixed_point=is_fixed)
   mwi_unit.attach_recorder(mwi_data_recorder)
 
-  threshold_unit = ThresholdUnit("threshold_unit", window_size=WINDOW_SIZE, sample_rate=SAMPLE_RATE)
+  threshold_unit = ThresholdUnit("threshold_unit", WINDOW_SIZE, SAMPLE_RATE, is_fixed_point=is_fixed)
   threshold_unit.attach_recorder(threshold_data_recorder)
-  
+
   low_pass_unit.connect(high_pass_unit).connect(derivative_unit).connect(squaring_unit).connect(mwi_unit).connect(threshold_unit)
+  
+  scheduler_unit = Scheduler("sch", sample_queue, lanes=[low_pass_unit])
+  scheduler_unit.attach_recorder(raw_ecg_data_recorder)
 
-  scheduler = Scheduler("scheduler", sample_queue, lanes=[low_pass_unit])
-  scheduler.attach_recorder(raw_ecg_data_recorder)
+  units = [sample_queue, data_uploader, scheduler_unit, low_pass_unit, high_pass_unit, derivative_unit, squaring_unit, mwi_unit, threshold_unit]
+  clock = ClockUnit()
+  clock.subscribe_many(units)
 
-  units = [sample_queue, data_uploader, scheduler, low_pass_unit, high_pass_unit, derivative_unit, squaring_unit, mwi_unit, threshold_unit]
-  clock_unit = ClockUnit()
-  clock_unit.subscribe_many(units)
+  while True:
+    clock.tick()
+    if not data_uploader.active and all(not u.busy and not u.output_data for u in units):
+      break
+  
+  return [raw_ecg_data_recorder, low_pass_data_recorder, high_pass_data_recorder, derivative_data_recorder, squaring_data_recorder, mwi_data_recorder, threshold_data_recorder], threshold_unit
 
-  # TODO: Should stop running when all samples are processed
-  for _ in range(1000000):
-    clock_unit.tick()
+if __name__ == "__main__":
+  # patient_number = input("Enter the patient number (116, 123, or 215): ")
+  patient_number = 116
 
-    if clock_unit.cycle % 100000 == 0:
-      print(clock_unit)
+  record_path = f"ecg_data/patient_{patient_number}/{patient_number}"
 
-  plot_data_recorders(data_recorders, patient_number=patient_number)
+  float_samples = load_data(record_path)
+  fixed_samples = (float_samples * FIXED_POINT_SCALE).astype(np.int32)
 
-  print(f"Calculated BPM = {threshold_unit.get_bpm()}")
-  print(f"Actual BPM = {get_patient_bpm(patient_number)}")
+  print("Running Floating Point Simulation...")
+  float_recorders, float_unit = run_simulation(float_samples, is_fixed=False)
+  float_bpm = float_unit.get_bpm()
 
-  print(clock_unit)
-  print(data_uploader)
-  print(sample_queue)
-  print(scheduler)
-  print(low_pass_unit)
-  print(high_pass_unit)
-  print(derivative_unit)
-  print(squaring_unit)
-  print(mwi_unit)
-  print(threshold_unit)
+  print("Running Fixed Point Simulation...")
+  fixed_recorders, fixed_unit = run_simulation(fixed_samples, is_fixed=True)
+  fixed_bpm = fixed_unit.get_bpm()
 
-  # Confirm that the load_float_samples and load_fixed_samples load data as fixed and float.
-  # The latency of the pipeline units (low pass, high pass, derivative, squaring, window, and threshold) should change based on fixed and floating point samples.
-  # Confirm that the threshold unit is valid. It most likely is since we get the right BPM, but look it over nonetheless.
-  # Confirm that the moving window integration unit is valid. It most likely is since we get the right BPM, but look it over nonetheless.
-  # Confirm that each of the pipeline units is using some form of parallelization (if possible).
-  # Remove the lane functionality from the scheduler (we only have 1 lane now).
-  # There is no overlap between windows anymore. AI told me that this was neccessary, but from what I can tell, we are calculating the BPM correctly so I see no point in adding more complexity. Find a reason for this.
-  # Look into how we can analyze throughput vs battery life.
-  # It seems like the data being plotted is slightly offset from other pipeline stages. Confirm if this is ok.
-  # Figure out the issue with the large number of stalled cycles.
+  print(f"\nPatient #{patient_number}:")
+  print(f"Actual BPM (Database): {get_patient_bpm(patient_number)}")
+  print(f"Float Mode BPM: {float_bpm}")
+  print(f"Fixed Mode BPM: {fixed_bpm}")
+
+  print("\nFloat Point vs Fixed Point Results:")
+  for i in range(len(float_recorders)-1):
+    float_signal = np.array(float_recorders[i].get_signal())
+    fixed_signal = np.array(fixed_recorders[i].get_signal()) / FIXED_POINT_SCALE
+
+    min_len = min(len(float_signal), len(fixed_signal))
+    
+    rmse = np.sqrt(np.mean((float_signal[:min_len] - fixed_signal[:min_len])**2))
+    print(f"{float_recorders[i].name} RMSE: {rmse:.8f}")
+
+  plot_data_recorders(fixed_recorders, patient_number=patient_number)
+  plot_data_recorders(float_recorders, patient_number=patient_number)

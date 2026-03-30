@@ -3,7 +3,7 @@ from hardware_unit import HardwareUnit
 
 class HighPassUnit(HardwareUnit):
 
-  def __init__(self, name: str, window_size: int, vector_width: int):
+  def __init__(self, name: str, window_size: int, vector_width: int, is_fixed_point: bool):
 
     # 1. FIR Stage: (-(1/32)x[n] + x[n-16] - x[n-17] + (1/32)x[n-32])
     #    - Exploit DLP: We emulate SIMD vectorization where "vector_width" samples are processed in parallel.
@@ -16,7 +16,7 @@ class HighPassUnit(HardwareUnit):
     iir_cycles = 1 * window_size
     latency = fir_cycles + iir_cycles
 
-    super().__init__(name, latency_cycles=latency)
+    super().__init__(name, latency_cycles=latency, is_fixed_point=is_fixed_point)
     
     self.window_size = window_size
     self.vector_width = vector_width
@@ -30,22 +30,21 @@ class HighPassUnit(HardwareUnit):
     x_current = np.array(data)
     x_extended = np.concatenate([self.x_history, x_current])
     
-    # part_a = -(1/32)x[n] + x[n-16] - x[n-17] + (1/32)x[n-32]
-    part_a = (-(1/32) * x_extended[32:] + x_extended[16:-16] - x_extended[15:-17] + (1/32) * x_extended[:self.window_size])
+    if self.is_fixed_point:
+      x_n = x_extended[32:].astype(np.int32)
+      x_32 = x_extended[:self.window_size].astype(np.int32)
+      # part_a = -(1/32)x[n] + x[n-16] - x[n-17] + (1/32)x[n-32]
+      part_a = -(x_n >> 5) + x_extended[16:-16] - x_extended[15:-17] + (x_32 >> 5)
+    else:
+      # part_a = -(1/32)x[n] + x[n-16] - x[n-17] + (1/32)x[n-32]
+      part_a = (-(1/32) * x_extended[32:] + x_extended[16:-16] - x_extended[15:-17] + (1/32) * x_extended[:self.window_size])
 
     results = []
     for i in range(len(part_a)):
-      
       # y[n] = y[n-1] + part_a
       y_n = self.y_1 + part_a[i]
-      
       self.y_1 = y_n
-      
       results.append(y_n)
 
     self.x_history = x_current[-32:]
-    
     return results
-
-  def __repr__(self) -> str:
-    return f"<HighPassUnit name={self.name} latency_cycles={self.latency_cycles} busy={self.busy}>"

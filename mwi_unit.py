@@ -2,7 +2,7 @@ import numpy as np
 from hardware_unit import HardwareUnit
 
 class MWIUnit(HardwareUnit):
-  def __init__(self, name: str, window_size: int, vector_width: int, mwi_window_size: int):
+  def __init__(self, name: str, window_size: int, vector_width: int, mwi_window_size: int, is_fixed_point: bool):
     # 1. FIR Stage: (x[n] - x[n-mwi_window_size])
     #    - Exploit DLP: We emulate SIMD vectorization where "vector_width" samples are processed in parallel.
     #    - Cost: 1 op (sub) per sample.
@@ -19,7 +19,7 @@ class MWIUnit(HardwareUnit):
 
     latency = fir_cycles + iir_cycles + norm_cycles
 
-    super().__init__(name, latency_cycles=latency)
+    super().__init__(name, latency_cycles=latency, is_fixed_point=is_fixed_point)
     
     self.window_size = window_size
     self.vector_width = vector_width
@@ -40,18 +40,17 @@ class MWIUnit(HardwareUnit):
     
     results = []
     for i in range(len(x_current)):
-      
       # sum[n] = sum[n-1] + part_a
-      self.running_sum = self.running_sum + part_a[i]
-
-      # y[n] = (1/mwi_window_size) * sum[n]
-      y_n = self.running_sum * self.norm_constant
-
+      self.running_sum += part_a[i]
+      
+      if self.is_fixed_point:
+        # y[n] = sum[n] // mwi_window_size
+        y_n = self.running_sum // self.mwi_window_size
+      else:
+        # y[n] = (1/mwi_window_size) * sum[n]
+        y_n = self.running_sum * self.norm_constant
       results.append(y_n)
 
     self.x_history = x_current[-self.mwi_window_size:]
 
     return results
-
-  def __repr__(self) -> str:
-    return f"<MWIUnit name={self.name} latency={self.latency_cycles} busy={self.busy}>"

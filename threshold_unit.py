@@ -1,16 +1,18 @@
 import numpy as np
 from hardware_unit import HardwareUnit
+from config import FIXED_POINT_SCALE
 
 class ThresholdUnit(HardwareUnit):
-  def __init__(self, name: str, window_size: int, sample_rate: int):
-    super().__init__(name, latency_cycles=1)
+  def __init__(self, name: str, window_size: int, sample_rate: int, is_fixed_point: bool):
+    super().__init__(name, latency_cycles=1, is_fixed_point=is_fixed_point)
     self.window_size = window_size
     self.sample_rate = sample_rate
+
+    scale = FIXED_POINT_SCALE if self.is_fixed_point else 1.0
     
-    # Prevents 'Cold Start' where threshold stays at 0
-    self.spki = 2.0  # Signal Peak Estimate
-    self.npki = 0.5  # Noise Peak Estimate
-    self.threshold = 1.0
+    self.spki = 2.0 * scale
+    self.npki = 0.5 * scale
+    self.threshold = 1.0 * scale
     
     self.sample_count = 0
     self.peaks = []  # Stores the sample_count of each detection
@@ -43,7 +45,6 @@ class ThresholdUnit(HardwareUnit):
     return [detection_event] * num_samples
 
   def get_bpm(self) -> float:
-    """Calculates BPM based on internal peak list."""
     if len(self.peaks) < 2:
       return 0.0
     
