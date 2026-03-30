@@ -1,21 +1,31 @@
 import numpy as np
 from hardware_unit import HardwareUnit
+from config import (
+  FIXED_ADD_CYCLES,
+  FIXED_SUB_CYCLES,
+  FIXED_SHIFT_CYCLES,
+  FLOAT_ADD_CYCLES,
+  FLOAT_SUB_CYCLES,
+  FLOAT_MUL_CYCLES,
+)
 class LowPassUnit(HardwareUnit):
   
-  # TODO: float and fixed operation values are incorrect
   def __init__(self, name: str, window_size: int, vector_width: int, is_fixed_point: bool):
     # 1. FIR Stage: (x[n] - 2x[n-6] + x[n-12])
     #    - Exploit DLP: We emulate SIMD vectorization where "vector_width" samples are processed in parallel.
-    #    - Cost: 2 ops (sub, add) per sample. 2* is a "free" bit-shift.
-    fir_float_cycles = (2 * window_size) // vector_width
-    fir_fixed_cycles = (2 * window_size) // vector_width
+    #    - Float ops/sample: mul + sub + add
+    #    - Fixed ops/sample: shift + sub + add
+    float_fir_ops_per_sample = FLOAT_MUL_CYCLES + FLOAT_SUB_CYCLES + FLOAT_ADD_CYCLES
+    fixed_fir_ops_per_sample = FIXED_SHIFT_CYCLES + FIXED_SUB_CYCLES + FIXED_ADD_CYCLES
+    fir_float_cycles = (window_size * float_fir_ops_per_sample + vector_width - 1) // vector_width
+    fir_fixed_cycles = (window_size * fixed_fir_ops_per_sample + vector_width - 1) // vector_width
 
     # 2. IIR Stage: (2y[n-1] - y[n-2] + part_a)
     #    - Sequential Bottleneck: y[n] has a dependency on y[n-1] and y[n-2].
-    #    - Cost: 2 ops (sub, add) per sample. 2* is a "free" bit-shift.
-    # iir_cycles = 2 * window_size
-    iir_float_cycles = window_size * 6
-    iir_fixed_cycles = window_size * 1
+    #    - Float ops/sample: mul + sub + add
+    #    - Fixed ops/sample: shift + sub + add
+    iir_float_cycles = window_size * (FLOAT_MUL_CYCLES + FLOAT_SUB_CYCLES + FLOAT_ADD_CYCLES)
+    iir_fixed_cycles = window_size * (FIXED_SHIFT_CYCLES + FIXED_SUB_CYCLES + FIXED_ADD_CYCLES)
 
     fixed_latency = fir_fixed_cycles + iir_fixed_cycles
     float_latency = fir_float_cycles + iir_float_cycles

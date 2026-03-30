@@ -1,10 +1,59 @@
 import numpy as np
 from hardware_unit import HardwareUnit
-from config import FIXED_POINT_SCALE
+from config import (
+  FIXED_POINT_SCALE,
+  FIXED_ADD_CYCLES,
+  FIXED_SUB_CYCLES,
+  FIXED_MUL_CYCLES,
+  FIXED_COMPARE_CYCLES,
+  FLOAT_ADD_CYCLES,
+  FLOAT_SUB_CYCLES,
+  FLOAT_MUL_CYCLES,
+  FLOAT_COMPARE_CYCLES,
+)
 
 class ThresholdUnit(HardwareUnit):
   def __init__(self, name: str, window_size: int, sample_rate: int, is_fixed_point: bool):
-    super().__init__(name, latency_cycles=1, is_fixed_point=is_fixed_point)
+    # 1) Peak candidate extraction via max(data): model as a compare reduction.
+    max_reduce_float_cycles = max(window_size - 1, 0) * FLOAT_COMPARE_CYCLES
+    max_reduce_fixed_cycles = max(window_size - 1, 0) * FIXED_COMPARE_CYCLES
+
+    # 2) Gating condition: current_max > threshold and refractory-period check.
+    gate_float_cycles = FLOAT_COMPARE_CYCLES + FLOAT_SUB_CYCLES + FLOAT_COMPARE_CYCLES
+    gate_fixed_cycles = FIXED_COMPARE_CYCLES + FIXED_SUB_CYCLES + FIXED_COMPARE_CYCLES
+
+    # 3) Adaptive SPKI/NPKI update (one branch executes each window):
+    # value = alpha * current_max + beta * previous
+    adaptive_update_float_cycles = (2 * FLOAT_MUL_CYCLES) + FLOAT_ADD_CYCLES
+    adaptive_update_fixed_cycles = (2 * FIXED_MUL_CYCLES) + FIXED_ADD_CYCLES
+
+    # 4) Threshold update: npki + 0.25 * (spki - npki)
+    threshold_update_float_cycles = FLOAT_SUB_CYCLES + FLOAT_MUL_CYCLES + FLOAT_ADD_CYCLES
+    threshold_update_fixed_cycles = FIXED_SUB_CYCLES + FIXED_MUL_CYCLES + FIXED_ADD_CYCLES
+
+    # 5) sample_count += num_samples
+    sample_count_update_float_cycles = FLOAT_ADD_CYCLES
+    sample_count_update_fixed_cycles = FIXED_ADD_CYCLES
+
+    float_latency = (
+      max_reduce_float_cycles
+      + gate_float_cycles
+      + adaptive_update_float_cycles
+      + threshold_update_float_cycles
+      + sample_count_update_float_cycles
+    )
+    fixed_latency = (
+      max_reduce_fixed_cycles
+      + gate_fixed_cycles
+      + adaptive_update_fixed_cycles
+      + threshold_update_fixed_cycles
+      + sample_count_update_fixed_cycles
+    )
+
+    if is_fixed_point:
+      super().__init__(name, latency_cycles=fixed_latency, is_fixed_point=is_fixed_point)
+    else:
+      super().__init__(name, latency_cycles=float_latency, is_fixed_point=is_fixed_point)
     self.window_size = window_size
     self.sample_rate = sample_rate
 

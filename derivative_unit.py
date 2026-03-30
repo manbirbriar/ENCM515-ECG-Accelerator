@@ -1,16 +1,30 @@
 import numpy as np
 from hardware_unit import HardwareUnit
+from config import (
+  FIXED_ADD_CYCLES,
+  FIXED_SUB_CYCLES,
+  FIXED_SHIFT_CYCLES,
+  FLOAT_ADD_CYCLES,
+  FLOAT_SUB_CYCLES,
+  FLOAT_MUL_CYCLES,
+)
 
 class DerivativeUnit(HardwareUnit):
 
   def __init__(self, name: str, window_size: int, vector_width: int, is_fixed_point: bool):
     # 1. FIR Stage: (1/8) * [2x[n] + x[n-1] - x[n-3] - 2x[n-4]]
     #    - Exploit DLP: We emulate SIMD vectorization where "vector_width" samples are processed in parallel.
-    #    - Cost: 3 ops (add, sub, sub) per sample. (1/8)* is a "free" bit-shift.
-    fir_cycles = (3 * window_size) // vector_width
-    latency = fir_cycles
+    #    - Float ops/sample: 2 mul + 1 add + 2 sub
+    #    - Fixed ops/sample: 3 shift + 1 add + 2 sub
+    float_fir_ops_per_sample = (2 * FLOAT_MUL_CYCLES) + FLOAT_ADD_CYCLES + (2 * FLOAT_SUB_CYCLES)
+    fixed_fir_ops_per_sample = (3 * FIXED_SHIFT_CYCLES) + FIXED_ADD_CYCLES + (2 * FIXED_SUB_CYCLES)
+    fir_float_cycles = (window_size * float_fir_ops_per_sample + vector_width - 1) // vector_width
+    fir_fixed_cycles = (window_size * fixed_fir_ops_per_sample + vector_width - 1) // vector_width
 
-    super().__init__(name, latency_cycles=latency, is_fixed_point=is_fixed_point)
+    if is_fixed_point:
+      super().__init__(name, latency_cycles=fir_fixed_cycles, is_fixed_point=is_fixed_point)
+    else:
+      super().__init__(name, latency_cycles=fir_float_cycles, is_fixed_point=is_fixed_point)
     
     self.window_size = window_size
     self.vector_width = vector_width

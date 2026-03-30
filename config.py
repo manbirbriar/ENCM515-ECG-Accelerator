@@ -20,3 +20,18 @@ QUEUE_SIZE: int = int(WINDOW_SIZE * 10) # 720
 DATA_RECORDER_CAPACITY: int = 2500
 
 VECTOR_WIDTH: int = 12
+
+# Operation cycle-cost table used by latency models.
+# Fixed-point assumes integer datapath with 1-cycle arithmetic.
+# Floating-point assumes a slower embedded FP datapath.
+FIXED_ADD_CYCLES: int = 1
+FIXED_SUB_CYCLES: int = 1
+FIXED_MUL_CYCLES: int = 1
+FIXED_SHIFT_CYCLES: int = 1
+FIXED_COMPARE_CYCLES: int = 1
+
+FLOAT_ADD_CYCLES: int = 2
+FLOAT_SUB_CYCLES: int = 2
+FLOAT_MUL_CYCLES: int = 3
+FLOAT_SHIFT_CYCLES: int = 1
+FLOAT_COMPARE_CYCLES: int = 1
