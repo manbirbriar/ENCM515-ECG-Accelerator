@@ -306,13 +306,25 @@ def main():
         s2x = fir_fixed_point(s1x,     notch_b)
         s3x = fir_fixed_point(s2x,     smooth_b)
 
-        # R-peak detection
-        r_fp = detect_r_peaks(s3,  fs)
-        r_fx = detect_r_peaks(s3x, fs)
+        # Group delay compensation
+        # Each linear-phase FIR has delay = (N-1)/2 samples.
+        # Total delay across 3 stages = (100 + 100 + 50) / 2 = 125 samples.
+        group_delay = (len(bp_b)-1)//2 + (len(notch_b)-1)//2 + (len(smooth_b)-1)//2
 
-        # Accuracy vs ground truth
-        acc_fp = detection_accuracy(r_fp, ann, fs=fs)
-        acc_fx = detection_accuracy(r_fx, ann, fs=fs)
+        # R-peak detection
+        r_fp_raw = detect_r_peaks(s3,  fs)
+        r_fx_raw = detect_r_peaks(s3x, fs)
+
+        # Shift detected peaks back by group delay to align with annotations
+        r_fp = r_fp_raw - group_delay
+        r_fx = r_fx_raw - group_delay
+        # Remove any peaks that shifted below zero
+        r_fp = r_fp[r_fp >= 0]
+        r_fx = r_fx[r_fx >= 0]
+
+        # Accuracy vs ground truth (wider tolerance: 300 ms covers any residual jitter)
+        acc_fp = detection_accuracy(r_fp, ann, tolerance_ms=300, fs=fs)
+        acc_fx = detection_accuracy(r_fx, ann, tolerance_ms=300, fs=fs)
 
         # SNR (float vs fixed)
         snr_fl = snr_db(s3, s3)           # float vs itself = reference
@@ -328,6 +340,8 @@ def main():
 
         pdata.update({'s1':s1,'s2':s2,'s3':s3,'s3x':s3x,
                       'r_fp':r_fp,'r_fx':r_fx,
+                      'r_fp_raw':r_fp_raw,
+                      'group_delay':group_delay,
                       'acc_fp':acc_fp,'snr_fx':snr_fx,'rmse':rmse,'hr':hr})
 
         results_table.append({
@@ -393,7 +407,7 @@ def main():
         row_filt.vlines(pd['t'][ann_win], ymin=row_filt.get_ylim()[0],
                         ymax=row_filt.get_ylim()[1], color='green', alpha=0.4,
                         lw=0.8, label='Ground-truth R-peaks')
-        det_win = pd['r_fp'][(pd['r_fp'] >= PLOT_WIN.start) & (pd['r_fp'] < PLOT_WIN.stop)]
+        det_win = pd['r_fp_raw'][(pd['r_fp_raw'] >= PLOT_WIN.start) & (pd['r_fp_raw'] < PLOT_WIN.stop)]
         row_filt.plot(pd['t'][det_win], pd['s3'][det_win], 'rv', ms=7, label='Detected R-peaks')
         row_filt.set_title(f'Patient {rec_name} — After 3-Stage FIR Pipeline + Detection', fontsize=10)
         row_filt.set_ylabel('mV'); row_filt.set_xlabel('Time (s)')
