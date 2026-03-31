@@ -8,6 +8,7 @@ from config import (
   FLOAT_SUB_CYCLES,
   FLOAT_MUL_CYCLES,
 )
+
 class LowPassUnit(HardwareUnit):
   
   def __init__(self, name: str, window_size: int, vector_width: int, is_fixed_point: bool):
@@ -17,6 +18,7 @@ class LowPassUnit(HardwareUnit):
     #    - Fixed ops/sample: shift + sub + add
     float_fir_ops_per_sample = FLOAT_MUL_CYCLES + FLOAT_SUB_CYCLES + FLOAT_ADD_CYCLES
     fixed_fir_ops_per_sample = FIXED_SHIFT_CYCLES + FIXED_SUB_CYCLES + FIXED_ADD_CYCLES
+    
     fir_float_cycles = (window_size * float_fir_ops_per_sample + vector_width - 1) // vector_width
     fir_fixed_cycles = (window_size * fixed_fir_ops_per_sample + vector_width - 1) // vector_width
 
