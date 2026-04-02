@@ -1,57 +1,33 @@
-from hardware_unit import HardwareUnit
-from sample_queue import SampleQueue
+from __future__ import annotations
 
-# For each tick, if a full window is ready and at least one lane is free,
-# the scheduler extracts the window from the buffer and sends it to the first available lane
+from hardware_unit import HardwareUnit, SampleToken
+
+
 class Scheduler(HardwareUnit):
-  def __init__(self, name: str, sample_queue: SampleQueue, lanes: list[HardwareUnit]):
-    super().__init__(name, latency_cycles=1)
+  def __init__(self, name: str, lanes: list[HardwareUnit]):
+    super().__init__(name, latency_cycles=1, initiation_interval=1)
+    self.lanes = lanes
+    self.dispatch_index = 0
 
-    self.sample_queue: SampleQueue = sample_queue
-    self.lanes: list[HardwareUnit] = lanes
+  def can_accept(self, current_cycle: int) -> bool:
+    return any(lane.can_accept(current_cycle) for lane in self.lanes)
 
-    self.stall_count: int = 0
-    self.dispatched_window_count: int = 0
-    self.stalled: bool = False
+  def accept(self, token: SampleToken, current_cycle: int) -> bool:
+    lane_count = len(self.lanes)
+    for offset in range(lane_count):
+      lane = self.lanes[(self.dispatch_index + offset) % lane_count]
+      if lane.can_accept(current_cycle):
+        lane.accept(token, current_cycle)
+        self.dispatch_index = (self.dispatch_index + offset + 1) % lane_count
+        self.accepted_count += 1
+        self.emitted_count += 1
+        return True
 
-    self.current_sample_index = 0
+    self.stalled_cycles += 1
+    return False
 
-  # If a window is full and a lane is free, dispatch window, else, stall
   def tick(self, current_cycle: int) -> None:
-    self.current_cycle = current_cycle
-    self.stalled = False
+    return
 
-    if not self.sample_queue.window_ready():
-      return
-
-    free_lane = self.find_free_lane()
-
-    if not free_lane:
-      self.stalled = True
-      self.stall_count += 1
-      return
-
-    window = self.sample_queue.get_window()
-
-    if self.recorder:
-      self.recorder.record(window)
-
-    free_lane.input_data = window
-    self.dispatched_window_count += 1
-
-  # Return the first available lane or None if all are busy
-  def find_free_lane(self) -> HardwareUnit | None:
-    for lane in self.lanes:
-      if lane.is_available():
-        return lane
-    return None
-
-  # Unused
-  def compute(self, data: list) -> list:
-    return data
-
-  def is_stalled(self) -> bool:
-    return self.stalled
-
-  def __repr__(self) -> str:
-    return f"<Scheduler name={self.name} dispatched={self.dispatched_window_count} stall_count={self.stall_count}>"
+  def process_token(self, token: SampleToken, current_cycle: int) -> SampleToken:
+    return token

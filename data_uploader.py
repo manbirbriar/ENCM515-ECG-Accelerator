@@ -1,23 +1,29 @@
-from hardware_unit import HardwareUnit
+from __future__ import annotations
+
 import numpy as np
 
-# Loads the entire MIT-BIH record into memory on initialisation, then on each tick pushes exactly one sample into the connected SampleQueue
-# MIT-BIH is sampled at 360 Hz. Thus, one sample per tick means each clock cycle represents a sample period of ~2.78ms
-# When all samples have been sent, the uploader becomes inactive
-# samples will be in either fixed or floating point format
+from hardware_unit import HardwareUnit, SampleToken
+
+
 class DataUploader(HardwareUnit):
-  def __init__(self, name: str, samples: np.ndarray):
-    super().__init__(name, latency_cycles=1)
-
+  def __init__(self, name: str, samples: np.ndarray, sample_rate_hz: int, accel_clock_hz: int):
+    super().__init__(name, latency_cycles=1, initiation_interval=1)
     self.samples = samples
-    self.sample_index: int = 0
-    self.total_samples: int = len(self.samples)
-    self.active: bool = True
+    self.sample_rate_hz = sample_rate_hz
+    self.accel_clock_hz = accel_clock_hz
+    self.sample_index = 0
+    self.total_samples = len(samples)
+    self.active = True
+    self.dropped_samples = 0
 
-  # Push one sample per tick into the SampleQueue
+  def next_arrival_cycle(self) -> int | None:
+    if self.sample_index >= self.total_samples:
+      return None
+
+    numerator = (self.sample_index + 1) * self.accel_clock_hz
+    return (numerator + self.sample_rate_hz - 1) // self.sample_rate_hz
+
   def tick(self, current_cycle: int) -> None:
-    self.current_cycle = current_cycle
-
     if not self.active:
       return
 
@@ -25,22 +31,38 @@ class DataUploader(HardwareUnit):
       self.active = False
       return
 
-    # next_unit is expected to be the SampleQueue
-    if self.next_unit and self.next_unit.is_available():
-      sample = self.samples[self.sample_index]
-      self.next_unit.receive_sample(sample)
+    if self.next_unit is None:
+      self.active = False
+      return
+
+    next_cycle = self.next_arrival_cycle()
+    while next_cycle is not None and next_cycle <= current_cycle and self.sample_index < self.total_samples:
+      sample_value = self.samples[self.sample_index]
+      token = SampleToken(
+        sample_id=self.sample_index,
+        value=sample_value.item() if hasattr(sample_value, "item") else sample_value,
+        ingress_cycle=current_cycle,
+      )
+
+      if self.next_unit.accept(token, current_cycle):
+        if self.recorder is not None:
+          self.recorder.record_token(token, current_cycle)
+        self.accepted_count += 1
+      else:
+        self.dropped_samples += 1
+        self.stalled_cycles += 1
+
       self.sample_index += 1
+      next_cycle = self.next_arrival_cycle()
 
-  # Unused
-  def compute(self, data: list) -> list:
-    return data
+    if self.sample_index >= self.total_samples:
+      self.active = False
 
-  def is_available(self) -> bool:
-    return self.active
-  
-  # used to check if data has finished uploading
+  def process_token(self, token: SampleToken, current_cycle: int) -> SampleToken:
+    return token
+
   def is_done(self) -> bool:
-    return self.sample_index >= len(self.samples)
+    return self.sample_index >= self.total_samples
 
-  def __repr__(self) -> str:
-    return f"<DataUploader name={self.name} index={self.sample_index}/{self.total_samples} active={self.active}>"
+  def can_accept(self, current_cycle: int) -> bool:
+    return False

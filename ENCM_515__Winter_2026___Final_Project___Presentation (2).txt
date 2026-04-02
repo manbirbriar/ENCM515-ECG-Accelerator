@@ -1,0 +1,381 @@
+ENCM 515: Application Specific Processors &
+Accelerators
+Group Project & Group Presentation
+Dr. Rafee Al Ahsan,
+Instructor, Doctor of Philosophy (Ph.D.),
+Schulich School of Engineering, Department of Electrical and Software Engineering (ESE)
+University of Calgary (UCalgary)
+Date: 24th February, 2026
+Project & Presentation Slides Submission Due Date: 2nd April, 2026
+Total Marks: 50
+
+Project Overview (40 Marks)
+This Group Research Project challenges you to design, implement, analyze, and critically
+evaluate an end-to-end application-specific processor or accelerator-oriented computing framework aligned with the learning outcomes of ENCM 515: ApplicationSpecific Processors and Accelerators.
+Your project must integrate the core concepts of the course (where appropriate): processor architecture and execution models, instruction-level and data-level parallelism, DSPoriented workloads, precision-aware computation, and hardware–software co-design principles. Projects should focus on real-world domains such as wearable biomedical systems,
+autonomous drones, smart cameras, augmented reality devices, IoT inference engines, financial data streams, seismic monitoring, or multimedia processing pipelines.
+Projects must combine architectural reasoning, performance modeling, structured optimization analysis, and accelerator-oriented system-level evaluation. In
+addition, your work MUST include a working coding-based simulation that demonstrates and validates your accelerator-oriented ideas using MATLAB and/or Python
+and/or Cython and/or MicroPython (a single tool or a justified combination is acceptable). Your simulation must be used to generate measurable performance or behavioral
+results (not only diagrams or conceptual discussion).
+Based on your chosen topic, your work MUST integrate key elements such as:
+• Architectural analysis of execution models (e.g., RISC vs DSP vs application-specific
+accelerators, pipeline organization, SIMD/vector processing, superscalar or VLIW concepts);
+• Simulation-based modeling of datapath behavior, instruction flow, and pipeline characteristics (e.g., latency, initiation interval, throughput, hazard analysis) using MATLAB/Python/Cython/MicroPython where appropriate;
+• Performance evaluation using quantitative metrics (e.g., CPI, speedup, Amdahl’s Law,
+memory bandwidth impact, resource constraints) supported by simulation results;
+1
+
+• Application of hardware- and software-level optimization techniques (e.g., loop unrolling, fusion/fission, pipelining, data reuse, blocking/tiling, scheduling strategies)
+and demonstration of their effects through code-based experiments;
+• Precision-aware computation analysis (e.g., fixed-point vs floating-point trade-offs,
+quantization effects, numerical accuracy vs performance) validated through implemented test cases;
+• Hardware–software co-design reasoning (e.g., partitioning between general-purpose processor and accelerator-like components, evaluation of system-level trade-offs) supported
+by a runnable prototype or simulation model;
+• Critical evaluation of scalability limits, architectural bottlenecks, and theoretical speedup
+ceilings, with claims supported by measured data from your implementation.
+(See Minimum Required Standards for more information).
+Use of AI Tools: Generative AI (e.g., ChatGPT, Gemini) may assist with brainstorming, literature exploration, drafting structure, or refining explanations. However, you
+MUST:
+• Clearly cite any portion of the report influenced or supported by an AI tool
+(text, diagrams, analysis, code structure, or architectural modeling).
+• In your individual Contribution Statement, explain how the AI tool was used, for
+what purpose, and how you validated, simulated, tested, or refined its output through
+independent experimentation.
+• Note: Unacknowledged AI assistance violates academic integrity and will incur severe
+penalties.
+
+Learning Outcomes
+By completing this project, you will be able to:
+• Analyze and compare processor and accelerator architectures (e.g., RISC, DSP-oriented,
+SIMD, superscalar, VLIW) and justify design choices based on application constraints.
+• Model instruction execution, datapath behavior, and pipeline characteristics (e.g., hazards, initiation interval, latency, throughput) using simulation-based approaches.
+• Implement and evaluate accelerator-oriented workloads using MATLAB, Python,
+Cython, and/or MicroPython, and generate quantitative performance results.
+• Apply hardware- and software-level optimization techniques (e.g., loop unrolling, fusion/fission, pipelining, scheduling, data reuse) and measure their performance impact.
+• Evaluate memory hierarchy effects, bandwidth limitations, and data locality strategies
+in computational workloads.
+2
+
+• Assess precision-aware computation trade-offs (e.g., fixed-point vs floating-point arithmetic) in terms of numerical accuracy, performance, and resource utilization.
+• Apply hardware–software co-design principles to partition functionality between generalpurpose processors and accelerator-like components.
+• Critically analyze scalability limits, architectural bottlenecks, and theoretical speedup
+ceilings using structured performance modeling (e.g., Amdahl’s Law).
+• Demonstrate structured research methodology, reproducible experimentation, teamwork, and professional technical communication in an accelerator-oriented system design project.
+
+Approved Project Topic Titles
+Each group must select one topic from the list below and confirm by March 3rd, 2026.
+Topics are assigned on a first-come, first-served basis.
+Each project must:
+• Demonstrate structured architectural and performance analysis, including executionmodel evaluation, datapath reasoning, pipeline behavior, memory hierarchy considerations, and accelerator trade-off analysis.
+• Integrate hardware- and software-level optimization techniques aligned with
+ENCM 515 course topics, and validate results through a coding-based simulation using
+MATLAB, Python, Cython, and/or MicroPython.
+If no selection is received by the deadline, a topic will be automatically and randomly
+assigned.
+
+1. Real-Time Wearable ECG Signal Processing Accelerator
+• Design a simulated DSP accelerator for real-time ECG FIR filtering and peak detection.
+• Evaluate precision scaling (fixed-point vs floating-point) and its impact on numerical
+accuracy.
+• Model circular buffering, MAC-intensive pipelines, and deterministic execution.
+• Analyze throughput vs battery-life trade-offs in low-power wearable systems.
+• Suggested Implementation: MATLAB or Python for signal modeling and visualization; Cython for performance-critical sections; MicroPython if targeting embeddedstyle simulation.
+
+3
+
+2. Edge AI Accelerator for Smart Security Camera Motion Detection
+• Accelerate frame differencing and sliding-window threshold operations.
+• Evaluate real-time constraints for 30 FPS local processing.
+• Implement SIMD vectorization and analyze memory bandwidth bottlenecks.
+• Study data reuse optimization and throughput scalability limits.
+• Suggested Implementation: Python (NumPy) for vectorization experiments; Cython
+for optimized kernels; MATLAB for rapid prototyping and performance comparison.
+
+3. Real-Time Audio Noise Cancellation Accelerator for
+Headphones
+• Implement and optimize hybrid FIR/IIR filtering for active noise cancellation.
+• Analyze feedback loop stability and pipeline hazard implications.
+• Compare fixed-point and floating-point performance trade-offs.
+• Evaluate pipeline initiation interval and dependency constraints.
+• Suggested Implementation: MATLAB for DSP filter modeling; Python for experimentation; Cython for optimized real-time loop simulation.
+
+4. Accelerator Design for Autonomous Drone Sensor
+Fusion
+• Simulate acceleration of multi-sensor filtering and Kalman-like estimation models.
+• Model multi-stream dataflow with parallel processing considerations.
+• Partition computation between CPU and accelerator components.
+• Analyze latency vs throughput trade-offs in real-time autonomous systems.
+• Suggested Implementation: Python for multi-stream simulation; Cython for performancecritical fusion modules; MicroPython for embedded-style modeling.
+
+4
+
+5. Real-Time Video Frame Processing for Augmented
+Reality Glasses
+• Accelerate edge detection or convolution operations under strict latency constraints.
+• Implement SIMD-based vector processing.
+• Evaluate cache-aware memory blocking strategies.
+• Analyze speedup ceilings due to memory bottlenecks.
+• Suggested Implementation: Python with NumPy for convolution modeling; Cython
+for loop optimization; MATLAB for visualization and benchmarking.
+
+6. Precision-Optimized ML Inference Accelerator for
+IoT Devices
+• Implement and optimize matrix multiplication kernels for embedded ML inference.
+• Apply quantization-aware precision scaling.
+• Compare throughput vs numerical error trade-offs.
+• Analyze SIMD utilization and fixed-point arithmetic benefits.
+• Suggested Implementation: Python for matrix operations; Cython for optimized
+kernels; MATLAB for numerical precision analysis.
+
+7. High-Frequency Trading Data Stream Accelerator
+• Design a low-latency stream processing pipeline for moving-average analysis.
+• Model hazard-aware instruction scheduling.
+• Simulate superscalar execution and pipeline stall behavior.
+• Evaluate latency-critical architectural trade-offs.
+• Suggested Implementation: Python for stream simulation; Cython for optimized
+rolling-window computations; MATLAB for performance benchmarking.
+
+5
+
+8. Smart City Traffic Flow Prediction Accelerator
+• Develop a vectorized time-series processing pipeline.
+• Analyze data aggregation throughput in streaming workloads.
+• Evaluate memory hierarchy optimization strategies.
+• Apply Amdahl’s Law to assess parallelism limits and co-design trade-offs.
+• Suggested Implementation: Python for time-series modeling; Cython for vectorized
+optimization; MATLAB for performance comparison studies.
+
+9. Real-Time Seismic Signal Processing for Earthquake
+Monitoring
+• Implement multi-stage FIR filtering in a streaming architecture.
+• Model deterministic execution requirements for early-warning systems.
+• Utilize circular buffers and MAC-intensive datapaths.
+• Optimize initiation interval and pipeline balancing.
+• Suggested Implementation: MATLAB for multi-stage filter modeling; Python for
+pipeline simulation; Cython for optimized MAC loop execution.
+
+10. Energy-Efficient Biomedical Implant Signal Processor
+• Design an ultra-low-power filtering architecture for implantable devices.
+• Apply precision scaling to minimize computational overhead.
+• Evaluate loop unrolling impact on energy-performance trade-offs.
+• Justify hardware–software partitioning decisions under strict power constraints.
+• Suggested Implementation: Python for architectural modeling; Cython for energyperformance simulation; MicroPython for embedded-style experimentation.
+
+6
+
+11. Real-Time Voice Assistant Wake-Word Detection
+Accelerator
+• Accelerate streaming FFT or filtering-based wake-word detection.
+• Implement SIMD-based parallelism exploitation.
+• Analyze throughput and latency constraints in always-on systems.
+• Apply precision-aware and cache-conscious optimization strategies.
+• Suggested Implementation: Python for FFT modeling; MATLAB for signal visualization; Cython for optimized detection pipelines.
+
+12. Adaptive Video Compression Preprocessing Accelerator
+• Design a matrix transform acceleration model for video preprocessing.
+• Implement SIMD modeling and memory blocking optimizations.
+• Evaluate latency constraints for real-time compression pipelines.
+• Analyze hardware–software co-design trade-offs and theoretical speedup ceilings.
+• Suggested Implementation: Python for transform modeling; Cython for optimized
+computation kernels; MATLAB for benchmarking and visualization.
+
+Final Project Report Requirements (IEEE Format)
+Submit a professional technical report in the IEEE conference paper format attached in D2L.
+Your report must include the following and must not be below 5 pages (excluding the
+Appendix Section):
+1. Title – Select one of the approved project titles. Your entire report should focus
+on the chosen ENCM 515 accelerator-oriented topic, integrating architectural analysis, simulation-based experimentation, and hardware–software
+co-design reasoning where appropriate.
+2. Abstract – Concisely summarize the application domain, architectural challenge,
+accelerator-oriented approach, implementation method (MATLAB / Python/ Cython
+/ MicroPython), key performance findings (e.g., latency, throughput, speedup, precision impact), and real-world relevance.
+
+7
+
+3. Introduction – Introduce the motivation, background context, and problem statement. Explain the real-world system constraints (e.g., real-time, low-power, highthroughput, embedded limitations) and why accelerator-oriented design is necessary.
+4. Background and Theory – Present relevant architectural and computational concepts applicable to your project. This may include processor execution models (RISC,
+DSP, SIMD, superscalar, VLIW), pipeline hazards, instruction-level parallelism, memory hierarchy effects, precision-aware computation (fixed-point vs floating-point), Amdahl’s Law, datapath structures, and hardware–software co-design principles.
+5. Methods and Analysis – Describe your structured design and evaluation process in
+detail:
+• Definition of workload, constraints, and system requirements.
+• Architectural modeling (e.g., pipeline structure, SIMD/vectorization strategy,
+datapath organization, scheduling considerations).
+• Implementation details using MATLAB, Python, Cython, and/or MicroPython.
+• Application of optimization techniques (e.g., loop unrolling, fusion/fission, blocking, precision scaling, scheduling improvements).
+• Quantitative performance evaluation (e.g., latency, throughput, CPI, speedup,
+memory impact).
+6. Results and Discussion – Present measured simulation results such as performance
+comparison tables, speedup graphs, precision-error analysis, memory utilization trends,
+or pipeline efficiency evaluations. Discuss architectural bottlenecks, scalability limits,
+trade-offs between precision and performance, and system-level implications.
+7. Visual Elements – Include architectural block diagrams, pipeline timing diagrams,
+datapath illustrations, SIMD/vector processing models, memory hierarchy diagrams,
+or performance graphs to clearly support your technical analysis.
+8. Conclusions and Future Work – Summarize key architectural insights, optimization lessons learned, and performance findings. Propose future enhancements such as
+improved accelerator partitioning, advanced scheduling strategies, enhanced vectorization, or further precision-aware optimizations.
+9. References – Cite at least five scholarly or technical references (architecture textbooks, IEEE papers, DSP resources, optimization literature, or authoritative technical
+documentation) in IEEE citation format.
+10. Appendix – Provide detailed Group Contribution Statements for each member,
+clearly disclosing any use of AI tools and describing their purpose, validation process,
+experimental verification, and contribution to the final implementation and analysis.
+
+8
+
+Expectations & Individual Contribution Statement
+• This is a group research and implementation project. All architectural design, accelerator modeling, simulation development, performance analysis, and technical writing are collaborative; however, each member must submit an Individual
+Contribution Statement in the Appendix Section.
+• The report must demonstrate collective mastery of processor and accelerator architectures, structured performance modeling, optimization techniques, precision-aware
+computation, memory hierarchy analysis, and hardware–software co-design principles
+(as relevant to the selected topic), along with a clear division of responsibilities.
+• Each member’s Individual Contribution Statement must describe:
+– The specific components they designed, implemented, or analyzed (e.g., architectural modeling, pipeline analysis, SIMD/vectorization strategy, loop optimization, precision scaling study, memory hierarchy evaluation, hardware–software
+partitioning).
+– How they validated or supported their findings (e.g., coding simulations in MATLAB/Python/Cython/MicroPython, performance benchmarking, latency / throughput measurements, CPI/speedup analysis, Amdahl’s Law evaluation, graphical
+result interpretation).
+– Challenges faced during modeling or implementation and key lessons learned
+about accelerator-oriented system design, architectural bottlenecks, scalability
+limits, or optimization trade-offs.
+– Whether/how AI tools were used, including the purpose of use, how outputs were
+verified through independent simulation or testing, and the extent of contribution
+to the final implementation and analysis.
+• Conceptual discussion among groups is permitted; however, architectural analysis,
+coding implementation, performance experiments, diagrams, and technical
+writing must be your own group’s original work.
+
+Minimum Required Standards for this Project Report
+• Integration of at least four to five ENCM 515 course topics within your selected project. These may include processor execution models (e.g., RISC, DSP,
+SIMD, superscalar, VLIW), pipeline and hazard analysis, instruction-level and datalevel parallelism, memory hierarchy effects, precision-aware computation (fixed-point
+vs. floating-point), loop-level optimization techniques (e.g., unrolling, fusion/fission,
+pipelining), performance modeling (e.g., CPI, latency, throughput, Amdahl’s Law),
+and hardware–software co-design principles.
+9
+
+• The final report (excluding the appendix) must be a minimum of 5 full pages and
+follow the IEEE paper format provided on D2L.
+• Projects must include a working coding-based simulation implemented in MATLAB, Python, Cython, and/or MicroPython. The simulation must produce
+measurable quantitative results (e.g., latency, throughput, speedup, precision impact).
+Purely conceptual or theoretical discussions without executable modeling
+will not meet the minimum standard.
+• Projects must be original — no duplication of lab solutions, lecture examples
+or online repositories. Any violation of this would result in an immediate
+zero (0) for the entire Research Group Project.
+• The report must be clearly organized, analytically rigorous (while accessible to a technically informed audience), and professionally formatted in IEEE style, with all figures,
+tables, architectural diagrams, performance graphs, and references properly labelled
+and cited.
+• Include a structured architectural and performance evaluation appropriate to
+your topic — e.g., pipeline modeling, SIMD/vectorization comparison, loop optimization benchmarking, precision-error trade-off analysis, memory bandwidth study, scalability analysis using Amdahl’s Law, or hardware–software partitioning justification.
+Where applicable, include comparative analysis (e.g., baseline vs. optimized implementation, floating-point vs. fixed-point, single-issue vs. parallel execution).
+• Provide at least five (5) scholarly or authoritative references, including architecture textbooks, IEEE papers, DSP resources, optimization literature, or official
+technical documentation, cited in IEEE format.
+• Clearly acknowledge any assistance or content generation from AI tools (e.g., ChatGPT, Gemini, Copilot) within your Group Contribution Statements, including
+how outputs were validated through independent simulation, testing, benchmarking,
+and refinement before inclusion in the final work.
+
+Presentation Overview (10 marks)
+Each group must present their project and submit both the presentation materials and
+report by the deadline. This component assesses your ability to communicate a structured
+accelerator-oriented architectural analysis and simulation-based performance evaluation with technical clarity, quantitative evidence, and professional polish.
+
+Presentation Requirements
+• Each group must prepare and deliver an in-person 15-minute presentation during
+the scheduled presentation period between April 7th and April 14th, 2026. The
+exact date, time, and order of group presentations will be announced closer to the
+presentation week via D2L.
+10
+
+• All group members are expected to participate and present in their allotted time or
+they will receive a zero for the presentation. Each presenter should clearly explain
+their individual architectural contributions, simulation implementation responsibilities
+(MATLAB/Python/Cython/MicroPython), optimization techniques applied, and performance findings.
+• Presentations must cover the selected accelerator topic, real-world system context, architectural modeling approach (e.g., pipeline analysis, SIMD/vectorization strategy,
+memory hierarchy considerations, precision scaling), coding-based simulation methodology, structured performance results (e.g., latency, throughput, speedup), and key
+system-level implications.
+• Slides must be professionally prepared with clear structure, consistent formatting, and
+legible visuals (e.g., architectural block diagrams, pipeline timing diagrams, datapath
+illustrations, SIMD/vector processing models, performance graphs, comparison tables).
+• Each group will be evaluated on:
+– Clarity and depth of architectural and performance analysis.
+– Demonstration of structured accelerator reasoning supported by quantitative simulation results.
+– Quality of coding implementation explanation and validation methodology.
+– Visual organization, teamwork, and presentation delivery.
+– Ability to answer follow-up technical questions confidently and accurately.
+• Presentations exceeding 15 minutes will incur a time penalty. Groups are
+strongly encouraged to rehearse beforehand to ensure smooth delivery within the allotted time.
+
+Required Presentation Structure (15-Minute Duration + 3–5 Minute
+Q/A)
+1. Opening (1 min) Introduce your team, project title, and briefly state the motivation
+behind your chosen accelerator-oriented topic. Highlight the real-world system constraint (e.g., real-time, embedded, low-power, high-throughput) and explain why an
+application-specific processor or accelerator approach is necessary.
+2. Introduction & Problem Definition (2 min) Clearly define the computational
+workload and architectural challenge being addressed. Describe the application domain
+(e.g., wearable DSP, smart camera, IoT inference, streaming pipeline) and identify the
+primary performance bottlenecks (e.g., latency, memory bandwidth, precision limits,
+pipeline hazards).
+3. Objectives & Scope (2 min) Present your architectural and performance objectives,
+assumptions, and scope limitations. Specify the execution model under consideration
+11
+
+(e.g., SIMD, pipelined DSP-style, superscalar, vectorized design) and the coding tools
+used (MATLAB, Python, Cython, and/or MicroPython).
+4. Methodology / Architectural & Simulation Framework (5 min) Explain the
+structured approach applied in your design and evaluation:
+• Architectural modeling (e.g., datapath structure, pipeline organization, SIMD
+strategy, memory hierarchy considerations).
+• Optimization techniques applied (e.g., loop unrolling, fusion/fission, blocking,
+precision scaling).
+• Coding-based simulation methodology and validation process.
+• Performance metrics used (e.g., latency, throughput, CPI, speedup, Amdahl’s
+Law analysis).
+Include visual elements such as architectural block diagrams, pipeline timing diagrams,
+SIMD/vector models, memory hierarchy illustrations, and performance graphs.
+5. Results & Discussion (3–4 min) Present quantitative simulation results (e.g., baseline vs optimized comparison, precision-error trade-offs, speedup graphs, bottleneck
+identification). Discuss architectural trade-offs, scalability limits, memory constraints,
+precision-performance balance, and system-level implications.
+6. Conclusion & Future Work (1–2 min) Summarize the main architectural insights,
+optimization gains, and performance findings. Propose future enhancements such as
+improved accelerator partitioning, deeper vectorization, advanced scheduling strategies, further precision tuning, or extended real-world deployment considerations.
+7. Q/A Session (3–5 min) Address questions from the instructor and audience. Each
+group member should be ready to answer technical questions related to their architectural modeling, coding implementation, optimization techniques, and performance
+analysis.
+
+Technical and Professional Expectations
+• Each group will have a total timeslot of approximately 18–20 minutes, consisting of
+a 15-minute presentation followed by a 3–5-minute Q/A session.
+• All group members must be present and prepared to explain their individual and collective contributions, including architectural design decisions, simulation implementation
+(MATLAB/Python/Cython/MicroPython), optimization strategies, and performance
+analysis.
+• Ensure your slides are finalized, consistent, and match the version used during the
+in-person presentation.
+• Verify that all architectural diagrams, pipeline illustrations, SIMD/vector models,
+memory hierarchy diagrams, performance graphs, and comparison tables are clear,
+labeled, and properly cited.
+12
+
+• Maintain a professional and confident speaking pace — avoid reading slides verbatim.
+• Use precise architectural and performance terminology when describing your execution
+models, datapath structures, pipeline behavior, optimization techniques, and quantitative results (e.g., latency, throughput, CPI, speedup).
+• Coordinate transitions between speakers smoothly to ensure balanced time allocation
+across team members.
+• Respect the time limit: 15 minutes for presentation and 3–5 minutes for Q/A.
+Exceeding the allotted time will result in a deduction of marks.
+
+Submission Deadline for both Project & Presentation
+Slides
+• Deadline: 2 April 2026 (Thursday) by 11:59 PM via D2L.
+• Required Submissions:
+– Project Report in IEEE Format including Group Contribution Statements in the Appendix (PDF) – Upload to the “Final Group Project” Dropbox on D2L.
+– Presentation Slides (PowerPoint) – Upload to the “Group Presentation”Dropbox
+on D2L.
+• Late submissions will not be accepted without prior approval and will also result in a
+penalty.
+• All files based on whether they are either an IEEE project report or presentation slides
+MUST be properly named using the format shown below:
+Group Number ENCM515 (GroupProject/Presentation) ProjectTitle.
+
+—— The END —— Good Luck! ——
+
+13
+
+
