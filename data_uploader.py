@@ -1,46 +1,57 @@
 from hardware_unit import HardwareUnit
+from fifo import InputFIFO
 import numpy as np
 
-# Loads the entire MIT-BIH record into memory on initialisation, then on each tick pushes exactly one sample into the connected SampleQueue
-# MIT-BIH is sampled at 360 Hz. Thus, one sample per tick means each clock cycle represents a sample period of ~2.78ms
-# When all samples have been sent, the uploader becomes inactive
-# samples will be in either fixed or floating point format
 class DataUploader(HardwareUnit):
-  def __init__(self, name: str, samples: np.ndarray):
+  """
+  Models the ADC frontend of the ECG system.
+  Produces one sample every CYCLES_PER_SAMPLE clock cycles,
+  reflecting the fact that the hardware clock runs faster than the sample rate.
+  Pushes samples into the InputFIFO rather than directly into the processing pipeline.
+  """
+  def __init__(self, name: str, samples: np.ndarray, cycles_per_sample: int, fifo: InputFIFO):
     super().__init__(name, latency_cycles=1)
 
     self.samples = samples
+    self.cycles_per_sample = cycles_per_sample
+    self.fifo = fifo
+
     self.sample_index: int = 0
     self.total_samples: int = len(self.samples)
     self.active: bool = True
 
-  # Push one sample per tick into the SampleQueue
   def tick(self, current_cycle: int) -> None:
-    self.current_cycle = current_cycle
-
     if not self.active:
+      self.idle_cycles += 1
       return
 
     if self.sample_index >= self.total_samples:
       self.active = False
       return
 
-    # next_unit is expected to be the SampleQueue
-    if self.next_unit and self.next_unit.is_available():
-      sample = self.samples[self.sample_index]
-      self.next_unit.receive_sample(sample)
-      self.sample_index += 1
+    # Only push a sample every cycles_per_sample cycles
+    # This models the ADC running at 360Hz while the hardware clock runs faster
+    if current_cycle % self.cycles_per_sample != 0:
+      self.idle_cycles += 1
+      return
+
+    self.fifo.push(self.samples[self.sample_index])
+    self.sample_index += 1
+    self.busy_cycles += 1
 
   # Unused
-  def compute(self, data: list) -> list:
+  def compute(self, data):
     return data
 
   def is_available(self) -> bool:
     return self.active
-  
-  # used to check if data has finished uploading
+
   def is_done(self) -> bool:
-    return self.sample_index >= len(self.samples)
+    return self.sample_index >= self.total_samples
 
   def __repr__(self) -> str:
-    return f"<DataUploader name={self.name} index={self.sample_index}/{self.total_samples} active={self.active}>"
+    return (
+      f"<DataUploader name={self.name} "
+      f"index={self.sample_index}/{self.total_samples} "
+      f"active={self.active}>"
+    )
