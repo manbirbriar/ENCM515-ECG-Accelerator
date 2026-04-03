@@ -2,104 +2,117 @@ import numpy as np
 from hardware_unit import HardwareUnit
 from config import (
   FIXED_POINT_SCALE,
-  FIXED_ADD_CYCLES,
-  FIXED_SUB_CYCLES,
-  FIXED_MUL_CYCLES,
-  FIXED_COMPARE_CYCLES,
-  FLOAT_ADD_CYCLES,
-  FLOAT_SUB_CYCLES,
-  FLOAT_MUL_CYCLES,
-  FLOAT_COMPARE_CYCLES,
+  FIXED_ADD_CYCLES, FIXED_SUB_CYCLES, FIXED_MUL_CYCLES, FIXED_COMPARE_CYCLES,
+  FLOAT_ADD_CYCLES, FLOAT_SUB_CYCLES, FLOAT_MUL_CYCLES, FLOAT_COMPARE_CYCLES,
+  MIN_PEAK_WIDTH, REFRACTORY_SAMPLES,
 )
 
 class ThresholdUnit(HardwareUnit):
-  def __init__(self, name: str, window_size: int, sample_rate: int, is_fixed_point: bool):
-    # 1) Peak candidate extraction via max(data): model as a compare reduction.
-    max_reduce_float_cycles = max(window_size - 1, 0) * FLOAT_COMPARE_CYCLES
-    max_reduce_fixed_cycles = max(window_size - 1, 0) * FIXED_COMPARE_CYCLES
+  """
+  Adaptive threshold peak detector.
 
-    # 2) Gating condition: current_max > threshold and refractory-period check.
-    gate_float_cycles = FLOAT_COMPARE_CYCLES + FLOAT_SUB_CYCLES + FLOAT_COMPARE_CYCLES
-    gate_fixed_cycles = FIXED_COMPARE_CYCLES + FIXED_SUB_CYCLES + FIXED_COMPARE_CYCLES
+  Hardware blocks modeled:
+    - Comparator:       sample > threshold
+    - Counter:          refractory period tracking
+    - Counter:          peak width (consecutive samples above threshold)
+    - Shift register:   prev1, prev2 for slope-based peak detection
+    - 2x Multiplier:    SPKI/NPKI adaptive update (0.125 * x)
+    - Adder:            threshold = NPKI + 0.25*(SPKI - NPKI)
+    - Register file:    SPKI, NPKI, threshold, last_peak_sample
 
-    # 3) Adaptive SPKI/NPKI update (one branch executes each window):
-    # value = alpha * current_max + beta * previous
-    adaptive_update_float_cycles = (2 * FLOAT_MUL_CYCLES) + FLOAT_ADD_CYCLES
-    adaptive_update_fixed_cycles = (2 * FIXED_MUL_CYCLES) + FIXED_ADD_CYCLES
+  Peak is confirmed when ALL of:
+    - slope was rising  (prev1 > prev2)
+    - slope now falling (sample < prev1)
+    - prev1 was above threshold
+    - refractory period has elapsed
+    - signal was above threshold for MIN_PEAK_WIDTH consecutive samples
+  """
+  def __init__(self, name: str, sample_rate: int, is_fixed_point: bool):
 
-    # 4) Threshold update: npki + 0.25 * (spki - npki)
-    threshold_update_float_cycles = FLOAT_SUB_CYCLES + FLOAT_MUL_CYCLES + FLOAT_ADD_CYCLES
-    threshold_update_fixed_cycles = FIXED_SUB_CYCLES + FIXED_MUL_CYCLES + FIXED_ADD_CYCLES
+    # 1. Comparator: sample > threshold
+    compare_cycles = FIXED_COMPARE_CYCLES if is_fixed_point else FLOAT_COMPARE_CYCLES
 
-    # 5) sample_count += num_samples
-    sample_count_update_float_cycles = FLOAT_ADD_CYCLES
-    sample_count_update_fixed_cycles = FIXED_ADD_CYCLES
-
-    float_latency = (
-      max_reduce_float_cycles
-      + gate_float_cycles
-      + adaptive_update_float_cycles
-      + threshold_update_float_cycles
-      + sample_count_update_float_cycles
-    )
-    fixed_latency = (
-      max_reduce_fixed_cycles
-      + gate_fixed_cycles
-      + adaptive_update_fixed_cycles
-      + threshold_update_fixed_cycles
-      + sample_count_update_fixed_cycles
+    # 2. Refractory check: subtraction + comparison
+    refractory_cycles = (
+      (FIXED_SUB_CYCLES + FIXED_COMPARE_CYCLES) if is_fixed_point
+      else (FLOAT_SUB_CYCLES + FLOAT_COMPARE_CYCLES)
     )
 
-    if is_fixed_point:
-      super().__init__(name, latency_cycles=fixed_latency, is_fixed_point=is_fixed_point)
-    else:
-      super().__init__(name, latency_cycles=float_latency, is_fixed_point=is_fixed_point)
-    self.window_size = window_size
+    # 3. Adaptive update: 2x mul + add (SPKI or NPKI)
+    adaptive_cycles = (
+      (2*FIXED_MUL_CYCLES + FIXED_ADD_CYCLES) if is_fixed_point
+      else (2*FLOAT_MUL_CYCLES + FLOAT_ADD_CYCLES)
+    )
+
+    # 4. Threshold update: sub + mul + add
+    threshold_cycles = (
+      (FIXED_SUB_CYCLES + FIXED_MUL_CYCLES + FIXED_ADD_CYCLES) if is_fixed_point
+      else (FLOAT_SUB_CYCLES + FLOAT_MUL_CYCLES + FLOAT_ADD_CYCLES)
+    )
+
+    # 5. Sample count increment: add
+    count_cycles = FIXED_ADD_CYCLES if is_fixed_point else FLOAT_ADD_CYCLES
+
+    latency = compare_cycles + refractory_cycles + adaptive_cycles + threshold_cycles + count_cycles
+    super().__init__(name, latency_cycles=latency, is_fixed_point=is_fixed_point)
+
     self.sample_rate = sample_rate
 
-    scale = FIXED_POINT_SCALE if self.is_fixed_point else 1.0
-    
-    self.spki = 2.0 * scale
-    self.npki = 0.5 * scale
+    # Scale initial estimates to fixed-point range if needed
+    scale = FIXED_POINT_SCALE if is_fixed_point else 1.0
+    self.spki      = 2.0 * scale
+    self.npki      = 0.5 * scale
     self.threshold = 1.0 * scale
-    
-    self.sample_count = 0
-    self.peaks = []  # Stores the sample_count of each detection
-    self.last_peak_sample = -500 # Ensure we can detect the very first beat
 
-  def compute(self, data: list) -> list:
-    num_samples = len(data)
-    current_max = np.max(data)
-    
-    # 360Hz * 0.2s = 72 samples (Refractory Period/Cooldown)
-    if current_max > self.threshold and (self.sample_count - self.last_peak_sample) > self.window_size:
+    # Peak detector state (shift register in hardware)
+    self.prev1 = 0.0
+    self.prev2 = 0.0
+    self.above_threshold_count = 0
+
+    # Detection tracking
+    self.sample_count = 0
+    self.last_peak_sample = -REFRACTORY_SAMPLES
+    self.peaks = []
+
+  def compute(self, sample) -> float:
+    # --- Peak detector logic ---
+    rising       = self.prev1 > self.prev2
+    falling      = sample < self.prev1
+    above        = self.prev1 > self.threshold
+    refractory_ok = (self.sample_count - self.last_peak_sample) > REFRACTORY_SAMPLES
+
+    # Track consecutive samples above threshold for noise rejection
+    if sample > self.threshold:
+      self.above_threshold_count += 1
+    else:
+      self.above_threshold_count = 0
+
+    width_ok = self.above_threshold_count >= MIN_PEAK_WIDTH
+
+    if rising and falling and above and refractory_ok and width_ok:
+      # Confirmed peak — update signal estimate
       self.peaks.append(self.sample_count)
       self.last_peak_sample = self.sample_count
-      
-      # Update Signal Estimate (1/8th weighting)
-      self.spki = 0.125 * current_max + 0.875 * self.spki
+      self.spki = 0.125 * self.prev1 + 0.875 * self.spki
       detection_event = 1.0
     else:
-      # Update Noise Estimate
-      self.npki = 0.125 * current_max + 0.875 * self.npki
+      # Not a peak — update noise estimate
+      self.npki = 0.125 * sample + 0.875 * self.npki
       detection_event = 0.0
 
-    # 3. Update Adaptive Threshold
+    # Update adaptive threshold
     self.threshold = self.npki + 0.25 * (self.spki - self.npki)
-    
-    # 4. Advance our internal 'clock'
-    self.sample_count += num_samples
-    
-    # Return a list for the recorder
-    return [detection_event] * num_samples
+
+    # Advance internal sample clock and shift peak detector registers
+    self.sample_count += 1
+    self.prev2 = self.prev1
+    self.prev1 = sample
+
+    return detection_event
 
   def get_bpm(self) -> float:
     if len(self.peaks) < 2:
       return 0.0
-    
-    # Calculate distance between peaks in samples
     intervals = np.diff(self.peaks)
     avg_interval_samples = np.mean(intervals)
-    
-    # Math: (60 sec / (avg_samples / samples_per_sec))
     return (60.0 * self.sample_rate) / avg_interval_samples
