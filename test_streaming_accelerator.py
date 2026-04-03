@@ -6,6 +6,7 @@ from collections import deque
 import numpy as np
 
 from accelerator_sim import CORTEX_M4_PROFILE, CORTEX_M4F_PROFILE, compare_recorders, load_data, run_simulation
+from circular_buffer import CircularDelayLine, CircularFIFO
 from config import FIXED_POINT_SCALE, MWI_WINDOW_SIZE, REFRACTORY_PERIOD_SAMPLES, SAMPLE_RATE_HZ, get_cycle_table
 from filter_mac_engine import FilterMacEngine
 from hardware_unit import SampleToken
@@ -153,6 +154,25 @@ class StreamingAcceleratorTests(unittest.TestCase):
     self.assertEqual(actual_pulses, expected_pulses)
     self.assertEqual(detector.peaks, expected_peaks)
 
+  def test_circular_buffer_wraparound(self) -> None:
+    delay_line = CircularDelayLine[int](capacity=4, zero_value=0)
+    for value in [10, 20, 30, 40, 50]:
+      delay_line.append(value)
+
+    fifo = CircularFIFO[int](capacity=3)
+    self.assertTrue(fifo.push(1))
+    self.assertTrue(fifo.push(2))
+    self.assertTrue(fifo.push(3))
+    self.assertEqual(fifo.pop(), 1)
+    self.assertTrue(fifo.push(4))
+
+    self.assertEqual(delay_line.delay(1), 50)
+    self.assertEqual(delay_line.delay(2), 40)
+    self.assertEqual(delay_line.delay(4), 20)
+    self.assertEqual(fifo.pop(), 2)
+    self.assertEqual(fifo.pop(), 3)
+    self.assertEqual(fifo.pop(), 4)
+
   def test_fixed_pipeline_uses_integer_values(self) -> None:
     fixed_input = (self.float_samples[:64] * FIXED_POINT_SCALE).astype(np.int32)
     filter_unit = FilterMacEngine("filter_mac_engine", get_cycle_table(CORTEX_M4_PROFILE, is_fixed_point=True), True)
@@ -237,6 +257,18 @@ class StreamingAcceleratorTests(unittest.TestCase):
     rmse_by_stage = compare_recorders(float_results["recorders"], fixed_results["recorders"])
     self.assertLess(abs(float_results["peak_detector_unit"].get_bpm() - fixed_results["peak_detector_unit"].get_bpm()), 1.0)
     self.assertLess(rmse_by_stage["peak_detector"], 0.1)
+
+  def test_m4_soft_float_and_m4f_float_remain_aligned(self) -> None:
+    m4_soft_float_results = run_simulation(self.float_samples[:2000], is_fixed=False, core_profile=CORTEX_M4_PROFILE, accel_clock_hz=1_000_000)
+    m4f_float_results = run_simulation(self.float_samples[:2000], is_fixed=False, core_profile=CORTEX_M4F_PROFILE, accel_clock_hz=1_000_000)
+    rmse_by_stage = compare_recorders(
+      m4f_float_results["recorders"],
+      m4_soft_float_results["recorders"],
+      candidate_is_fixed=False,
+    )
+    self.assertLess(rmse_by_stage["filter_mac"], 1e-6)
+    self.assertLess(rmse_by_stage["mwi"], 1e-6)
+    self.assertLess(rmse_by_stage["peak_detector"], 1e-6)
 
 
 if __name__ == "__main__":

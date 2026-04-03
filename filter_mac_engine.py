@@ -1,21 +1,27 @@
 from __future__ import annotations
 
-from collections import deque
-
+from circular_buffer import CircularDelayLine
 from config import OperationCycleTable
 from hardware_unit import HardwareUnit, SampleToken
 
 
 class FilterMacEngine(HardwareUnit):
   def __init__(self, name: str, cycle_table: OperationCycleTable, is_fixed_point: bool):
-    low_pass_latency = (2 * cycle_table.shift if is_fixed_point else 2 * cycle_table.mul) + (2 * cycle_table.sub) + (2 * cycle_table.add)
-    high_pass_latency = (
-      (2 * cycle_table.shift if is_fixed_point else 2 * cycle_table.mul)
+    low_pass_latency = (
+      cycle_table.mac
+      + (cycle_table.shift if is_fixed_point else cycle_table.mul)
       + cycle_table.sub
-      + (3 * cycle_table.add)
+      + cycle_table.add
+    )
+    high_pass_latency = (
+      cycle_table.mac
+      + (cycle_table.shift if is_fixed_point else cycle_table.mul)
+      + cycle_table.sub
+      + (2 * cycle_table.add)
     )
     derivative_latency = (
-      (3 * cycle_table.shift if is_fixed_point else 2 * cycle_table.mul)
+      cycle_table.mac
+      + (cycle_table.shift if is_fixed_point else cycle_table.mul)
       + cycle_table.add
       + (2 * cycle_table.sub)
     )
@@ -27,14 +33,14 @@ class FilterMacEngine(HardwareUnit):
     )
 
     zero = 0 if is_fixed_point else 0.0
-    self.low_pass_x_history: deque[int | float] = deque([zero] * 12, maxlen=12)
+    self.low_pass_x_history = CircularDelayLine[int | float](capacity=12, zero_value=zero)
     self.low_pass_y_1: int | float = zero
     self.low_pass_y_2: int | float = zero
 
-    self.high_pass_x_history: deque[int | float] = deque([zero] * 32, maxlen=32)
+    self.high_pass_x_history = CircularDelayLine[int | float](capacity=32, zero_value=zero)
     self.high_pass_y_1: int | float = zero
 
-    self.derivative_x_history: deque[int | float] = deque([zero] * 4, maxlen=4)
+    self.derivative_x_history = CircularDelayLine[int | float](capacity=4, zero_value=zero)
 
   def process_token(self, token: SampleToken, current_cycle: int) -> SampleToken:
     x_n = int(token.value) if self.is_fixed_point else float(token.value)
@@ -56,8 +62,8 @@ class FilterMacEngine(HardwareUnit):
     )
 
   def _low_pass(self, x_n: int | float) -> int | float:
-    x_n6 = self.low_pass_x_history[6]
-    x_n12 = self.low_pass_x_history[0]
+    x_n6 = self.low_pass_x_history.delay(6)
+    x_n12 = self.low_pass_x_history.delay(12)
 
     if self.is_fixed_point:
       part_a = x_n - (int(x_n6) << 1) + int(x_n12)
@@ -71,9 +77,9 @@ class FilterMacEngine(HardwareUnit):
     return y_n
 
   def _high_pass(self, x_n: int | float) -> int | float:
-    x_n16 = self.high_pass_x_history[16]
-    x_n17 = self.high_pass_x_history[15]
-    x_n32 = self.high_pass_x_history[0]
+    x_n16 = self.high_pass_x_history.delay(16)
+    x_n17 = self.high_pass_x_history.delay(17)
+    x_n32 = self.high_pass_x_history.delay(32)
 
     if self.is_fixed_point:
       part_a = -(int(x_n) >> 5) + int(x_n16) - int(x_n17) + (int(x_n32) >> 5)
@@ -87,9 +93,9 @@ class FilterMacEngine(HardwareUnit):
     return y_n
 
   def _derivative(self, x_n: int | float) -> int | float:
-    x_n1 = self.derivative_x_history[3]
-    x_n3 = self.derivative_x_history[1]
-    x_n4 = self.derivative_x_history[0]
+    x_n1 = self.derivative_x_history.delay(1)
+    x_n3 = self.derivative_x_history.delay(3)
+    x_n4 = self.derivative_x_history.delay(4)
 
     if self.is_fixed_point:
       y_n = ((2 * int(x_n)) + int(x_n1) - int(x_n3) - (2 * int(x_n4))) >> 3

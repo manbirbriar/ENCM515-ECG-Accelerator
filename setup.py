@@ -12,7 +12,7 @@ from accelerator_sim import (
   run_frequency_sweep,
   run_simulation,
 )
-from config import CLOCK_SWEEP_HZ
+from config import CLOCK_SWEEP_HZ, SAMPLE_RATE_HZ
 
 
 def print_core_mode_comparison(comparisons: list[tuple[str, dict, float]]) -> None:
@@ -32,20 +32,31 @@ def print_core_mode_comparison(comparisons: list[tuple[str, dict, float]]) -> No
 def print_rmse_against_reference(
   reference_label: str,
   reference_recorders: dict,
-  comparisons: list[tuple[str, dict]],
+  comparisons: list[tuple[str, dict, bool]],
 ) -> None:
   print(f"\nRMSE vs {reference_label}")
-  for label, results in comparisons:
-    rmse_by_stage = compare_recorders(reference_recorders, results["recorders"])
+  for label, results, candidate_is_fixed in comparisons:
+    rmse_by_stage = compare_recorders(
+      reference_recorders,
+      results["recorders"],
+      candidate_is_fixed=candidate_is_fixed,
+    )
     print(f"  {label}:")
     for stage_name, rmse in rmse_by_stage.items():
       print(f"    {stage_name}: {rmse:.8f}")
 
 
 if __name__ == "__main__":
-  patient_number = 116
+  patient_number = 123
   record_path = f"ecg_data/patient_{patient_number}/{patient_number}"
-  analysis_samples = load_data(record_path)[:5000]
+  analysis_sample_limit = 5000
+  full_samples = load_data(record_path)
+  analysis_samples = full_samples[:analysis_sample_limit] if analysis_sample_limit is not None else full_samples
+  duration_seconds = len(analysis_samples) / SAMPLE_RATE_HZ
+  print(
+    f"\nRunning patient {patient_number} on {len(analysis_samples)} samples "
+    f"({duration_seconds:.2f} s at {SAMPLE_RATE_HZ} Hz)."
+  )
 
   print_cycle_summary(CORTEX_M4_PROFILE, is_fixed_for_run=True)
   m4_fixed_results = run_simulation(analysis_samples, is_fixed=True, core_profile=CORTEX_M4_PROFILE, accel_clock_hz=CLOCK_SWEEP_HZ[1])
@@ -83,13 +94,13 @@ if __name__ == "__main__":
     "Cortex-M4F Hardware-Float",
     m4f_float_results["recorders"],
     [
-      ("Cortex-M4 Fixed", m4_fixed_results),
-      ("Cortex-M4 Soft-Float", m4_soft_float_results),
+      ("Cortex-M4 Fixed", m4_fixed_results, True),
+      ("Cortex-M4 Soft-Float", m4_soft_float_results, False),
     ],
   )
 
   try:
-    plot_data_recorders(m4f_float_results["recorders"], patient_number=patient_number)
-    plot_data_recorders(m4_fixed_results["recorders"], patient_number=patient_number)
-  except RuntimeError as error:
+    plot_data_recorders(m4f_float_results["recorders"], patient_number=patient_number, show=False)
+    plot_data_recorders(m4_fixed_results["recorders"], patient_number=patient_number, show=False)
+  except Exception as error:
     print(f"\nPlotting skipped: {error}")

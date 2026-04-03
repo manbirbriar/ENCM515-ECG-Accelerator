@@ -17,6 +17,7 @@ from config import (
   FIXED_POINT_SCALE,
   INGRESS_FIFO_DEPTH,
   MWI_WINDOW_SIZE,
+  PEAK_DETECTOR_STARTUP_SAMPLES,
   REFRACTORY_PERIOD_SAMPLES,
   SAMPLE_RATE_HZ,
   get_cycle_table,
@@ -112,6 +113,7 @@ def run_simulation(
     cycle_table=cycle_table,
     sample_rate=sample_rate_hz,
     refractory_period_samples=REFRACTORY_PERIOD_SAMPLES,
+    startup_settle_samples=PEAK_DETECTOR_STARTUP_SAMPLES,
     is_fixed_point=is_fixed,
   )
 
@@ -177,6 +179,7 @@ def build_stage_models(core_profile: CoreProfile, is_fixed_for_run: bool) -> lis
       cycle_table=cycle_table,
       sample_rate=SAMPLE_RATE_HZ,
       refractory_period_samples=REFRACTORY_PERIOD_SAMPLES,
+      startup_settle_samples=PEAK_DETECTOR_STARTUP_SAMPLES,
       is_fixed_point=is_fixed_for_run,
     ),
   ]
@@ -192,20 +195,24 @@ def print_cycle_summary(core_profile: CoreProfile, is_fixed_for_run: bool) -> No
   print(f"  total_pipeline_latency_cycles: {total_latency}")
 
 
-def compare_recorders(float_recorders: dict[str, DataRecorder], fixed_recorders: dict[str, DataRecorder]) -> dict[str, float]:
+def compare_recorders(
+  reference_recorders: dict[str, DataRecorder],
+  candidate_recorders: dict[str, DataRecorder],
+  candidate_is_fixed: bool = True,
+) -> dict[str, float]:
   rmse_by_stage: dict[str, float] = {}
-  for stage_name, float_recorder in float_recorders.items():
-    fixed_signal = np.asarray(fixed_recorders[stage_name].get_signal(), dtype=np.float64)
-    float_signal = np.asarray(float_recorder.get_signal(), dtype=np.float64)
-    if stage_name != "peak_detector":
-      fixed_signal = fixed_signal / FIXED_POINT_SCALE
+  for stage_name, reference_recorder in reference_recorders.items():
+    candidate_signal = np.asarray(candidate_recorders[stage_name].get_signal(), dtype=np.float64)
+    reference_signal = np.asarray(reference_recorder.get_signal(), dtype=np.float64)
+    if candidate_is_fixed and stage_name != "peak_detector":
+      candidate_signal = candidate_signal / FIXED_POINT_SCALE
 
-    min_len = min(len(float_signal), len(fixed_signal))
+    min_len = min(len(reference_signal), len(candidate_signal))
     if min_len == 0:
       rmse_by_stage[stage_name] = 0.0
       continue
 
-    error = float_signal[:min_len] - fixed_signal[:min_len]
+    error = reference_signal[:min_len] - candidate_signal[:min_len]
     rmse_by_stage[stage_name] = float(np.sqrt(np.mean(error * error)))
   return rmse_by_stage
 
@@ -278,8 +285,11 @@ def print_frequency_sweep(sweep_results: list[dict[str, Any]]) -> None:
     )
 
 
-def plot_data_recorders(recorders: dict[str, DataRecorder], patient_number: int) -> None:
+def plot_data_recorders(recorders: dict[str, DataRecorder], patient_number: int, show: bool = True) -> None:
   try:
+    import matplotlib
+    if not show:
+      matplotlib.use("Agg")
     import matplotlib.pyplot as plt
   except ImportError as exc:
     raise RuntimeError("matplotlib is required for plotting") from exc
@@ -296,7 +306,9 @@ def plot_data_recorders(recorders: dict[str, DataRecorder], patient_number: int)
   axes[-1].set_xlabel("Sample")
   plt.suptitle(f"Patient {patient_number} Streaming ECG Accelerator", fontsize=20)
   plt.tight_layout()
-  plt.show()
+  if show:
+    plt.show()
+  plt.close(fig)
 
 
 __all__ = [

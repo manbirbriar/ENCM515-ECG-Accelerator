@@ -10,6 +10,7 @@ This repo models a **sample-by-sample wearable ECG accelerator** with these hard
 - `ControlUnit`
 
 The repo no longer exposes separate `low_pass`, `high_pass`, and `derivative` hardware modules. Those operations are modeled as internal sub-stages of `FilterMacEngine`.
+`FilterMacEngine` now uses a MAC-aware timing model, and the datapath delay lines / input FIFO are modeled explicitly with circular buffers rather than generic queues.
 
 The simulation infrastructure around those blocks is:
 

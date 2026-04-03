@@ -8,6 +8,7 @@ class OperationCycleTable:
   add: int
   sub: int
   mul: int
+  mac: int
   shift: int
   compare: int
 
@@ -46,6 +47,8 @@ DATA_RECORDER_CAPACITY: int = 2500
 # Moving-window integration and refractory period.
 MWI_WINDOW_SIZE: int = int(SAMPLE_RATE_HZ * 0.15)
 REFRACTORY_PERIOD_SAMPLES: int = int(SAMPLE_RATE_HZ * 0.2)
+# Ignore early filter transients before enabling adaptive peak detection.
+PEAK_DETECTOR_STARTUP_SAMPLES: int = int(SAMPLE_RATE_HZ * 0.4)
 
 # Reference power model:
 # STM32L476xx datasheet Rev 11 (July 2024), feature summary:
@@ -69,8 +72,8 @@ REFERENCE_ENERGY_PER_CYCLE_J: float = (
 CORTEX_M4_PROFILE = CoreProfile(
   name="cortex_m4",
   label="Arm Cortex-M4",
-  fixed_cycles=OperationCycleTable(add=1, sub=1, mul=1, shift=1, compare=1),
-  float_cycles=OperationCycleTable(add=25, sub=25, mul=35, shift=1, compare=15),
+  fixed_cycles=OperationCycleTable(add=1, sub=1, mul=1, mac=1, shift=1, compare=1),
+  float_cycles=OperationCycleTable(add=25, sub=25, mul=35, mac=60, shift=1, compare=15),
   hardware_float_supported=False,
   notes=(
     "No hardware FPU. Float timing is modeled as software-emulated runtime-library operations, "
@@ -81,8 +84,8 @@ CORTEX_M4_PROFILE = CoreProfile(
 CORTEX_M4F_PROFILE = CoreProfile(
   name="cortex_m4f",
   label="Arm Cortex-M4F",
-  fixed_cycles=OperationCycleTable(add=1, sub=1, mul=1, shift=1, compare=1),
-  float_cycles=OperationCycleTable(add=1, sub=1, mul=1, shift=1, compare=1),
+  fixed_cycles=OperationCycleTable(add=1, sub=1, mul=1, mac=1, shift=1, compare=1),
+  float_cycles=OperationCycleTable(add=1, sub=1, mul=1, mac=1, shift=1, compare=1),
   hardware_float_supported=True,
   notes="Includes single-precision FPU with 1-cycle VADD/VSUB/VMUL/VCMP instruction timing in the TRM table.",
 )
