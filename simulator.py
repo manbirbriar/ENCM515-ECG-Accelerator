@@ -114,14 +114,6 @@ def run_simulation(lead0_samples, lead1_samples, is_fixed: bool):
         f"peaks0={len(threshold0.peaks)} peaks1={len(threshold1.peaks)}"
       )
 
-    # uploaders_done = not uploader0.active and not uploader1.active
-    # pipeline_drained = all(
-    #   not u.busy and u.output_data is None and u.input_data is None
-    #   for u in all_units
-    #   if hasattr(u, 'busy')
-    # )
-    # if uploaders_done and pipeline_drained:
-    #   break
     uploaders_done = not uploader0.active and not uploader1.active
     fifo_empty = fifo0.is_empty() and fifo1.is_empty()
     pipeline_drained = all(
@@ -236,5 +228,10 @@ if __name__ == "__main__":
   compute_rmse(f_rec0, x_rec0)
 
   # Plots
-  plot_recorders(f_rec0, f"Patient {patient_number} - Float Lane 0")
-  plot_recorders(x_rec0, f"Patient {patient_number} - Fixed Lane 0")
+
+  # TODO: Lead 1 is not plotting correctly
+  # plot_recorders(f_rec0, f"Patient {patient_number} - Float Lane 0")
+  # plot_recorders(f_rec1, f"Patient {patient_number} - Float Lane 1")
+
+  # plot_recorders(x_rec0, f"Patient {patient_number} - Fixed Lane 0")
+  # plot_recorders(x_rec1, f"Patient {patient_number} - Fixed Lane 1")

@@ -10,10 +10,10 @@ from config import (
 )
 
 # Internal state machine states
-IDLE         = 'IDLE'
-LP_BUSY      = 'LP_BUSY'
-HP_BUSY      = 'HP_BUSY'
-DV_BUSY      = 'DV_BUSY'
+IDLE         = "IDLE"
+LP_BUSY      = "LP_BUSY"
+HP_BUSY      = "HP_BUSY"
+DV_BUSY      = "DV_BUSY"
 
 class MACUnit(HardwareUnit):
   """
@@ -59,7 +59,7 @@ class MACUnit(HardwareUnit):
     self.fifo = fifo
 
     # Internal history buffers (shift registers in hardware)
-    self.input_buffer = CircularBuffer(33, dtype=int if is_fixed_point else float)
+    self.input_buffer = CircularBuffer(13, dtype=int if is_fixed_point else float) # TODO: Used to be 33, changed to 13 (WHY?)
     self.lp_buffer    = CircularBuffer(33, dtype=int if is_fixed_point else float)
     self.hp_buffer    = CircularBuffer(5,  dtype=int if is_fixed_point else float)
 
