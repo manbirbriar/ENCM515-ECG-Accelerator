@@ -8,7 +8,7 @@ SAMPLE_RATE: int = 360 # Hz
 # Hardware clock frequency
 # Real DSP hardware runs much faster than the sample rate
 # This determines how many clock cycles are available per incoming sample
-CLOCK_FREQUENCY: int = 36000 # Hz
+CLOCK_FREQUENCY: int = 200000 # Hz
 CYCLES_PER_SAMPLE: int = CLOCK_FREQUENCY // SAMPLE_RATE # 1000 cycles per sample
 
 # QRS complex typically lasts between 80ms - 120ms
@@ -37,6 +37,7 @@ MAX_SAMPLES: int = 2500
 FIXED_ADD_CYCLES: int = 1
 FIXED_SUB_CYCLES: int = 1
 FIXED_MUL_CYCLES: int = 1
+FIXED_DIV_CYCLES: int = 7
 FIXED_SHIFT_CYCLES: int = 1
 FIXED_COMPARE_CYCLES: int = 1
 
