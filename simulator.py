@@ -12,9 +12,8 @@ from threshold_unit import ThresholdUnit
 from data_recorder import DataRecorder
 from config import (
   FIXED_POINT_SCALE, SAMPLE_RATE,
-  CYCLES_PER_SAMPLE, FIFO_SIZE, DATA_RECORDER_CAPACITY,
-  MAX_SAMPLES, BATTERY_CAPACITY_MAH, BATTERY_VOLTAGE,
-  DYNAMIC_POWER_UW_PER_MHZ
+  CLOCK_FREQUENCY, CYCLES_PER_SAMPLE, FIFO_SIZE, DATA_RECORDER_CAPACITY,
+  MAX_SAMPLES
 )
 
 # --- Data loading helpers ---
@@ -35,7 +34,7 @@ def load_data(record_path: str):
 
 # --- Pipeline builder ---
 
-def build_lane(name: str, samples: np.ndarray, is_fixed: bool, cycles_per_sample: int):
+def build_lane(name: str, samples: np.ndarray, is_fixed: bool, cycles_per_sample: int, fifo_size: int):
   """
   Builds one complete processing lane for a single ECG lead.
   Returns (units_list, fifo, mac, threshold, recorders_dict)
@@ -50,7 +49,7 @@ def build_lane(name: str, samples: np.ndarray, is_fixed: bool, cycles_per_sample
   threshold_recorder = DataRecorder(f"{name}_threshold", DATA_RECORDER_CAPACITY)
 
   # Hardware units
-  fifo      = InputFIFO(f"{name}_fifo", FIFO_SIZE)
+  fifo      = InputFIFO(f"{name}_fifo", fifo_size)
   uploader  = DataUploader(f"{name}_uploader", samples, cycles_per_sample, fifo)
   mac       = MACUnit(f"{name}_mac", fifo, is_fixed_point=is_fixed)
   squaring  = SquaringUnit(f"{name}_squaring", is_fixed_point=is_fixed)
@@ -85,12 +84,23 @@ def build_lane(name: str, samples: np.ndarray, is_fixed: bool, cycles_per_sample
 
 # --- Simulation runner ---
 
-def run_simulation(lead0_samples, lead1_samples, is_fixed: bool):
+def run_simulation(
+  lead0_samples,
+  lead1_samples,
+  is_fixed: bool,
+  clock_frequency_hz: int | None = None,
+  fifo_size: int | None = None,
+  verbose: bool = True,
+):
   mode = "Fixed" if is_fixed else "Float"
   total_samples = len(lead0_samples)
 
-  units0, fifo0, mac0, threshold0, recorders0 = build_lane("lane0", lead0_samples, is_fixed, CYCLES_PER_SAMPLE)
-  units1, fifo1, mac1, threshold1, recorders1 = build_lane("lane1", lead1_samples, is_fixed, CYCLES_PER_SAMPLE)
+  effective_clock_hz = CLOCK_FREQUENCY if clock_frequency_hz is None else clock_frequency_hz
+  cycles_per_sample = max(1, effective_clock_hz // SAMPLE_RATE)
+  effective_fifo_size = FIFO_SIZE if fifo_size is None else fifo_size
+
+  units0, fifo0, mac0, threshold0, recorders0 = build_lane("lane0", lead0_samples, is_fixed, cycles_per_sample, effective_fifo_size)
+  units1, fifo1, mac1, threshold1, recorders1 = build_lane("lane1", lead1_samples, is_fixed, cycles_per_sample, effective_fifo_size)
 
   clock = ClockUnit()
   clock.subscribe_many(units0)
@@ -100,12 +110,12 @@ def run_simulation(lead0_samples, lead1_samples, is_fixed: bool):
 
   # Run until both uploaders are done and all units have drained
   all_units = units0 + units1
-  log_interval = CYCLES_PER_SAMPLE * 1000  # log every 1000 samples worth of cycles
+  log_interval = max(1, cycles_per_sample * 1000)  # log every 1000 samples worth of cycles
   while True:
     clock.tick()
 
     # Log progress every 1000 samples
-    if clock.cycle % log_interval == 0:
+    if verbose and clock.cycle % log_interval == 0:
       samples_sent = uploader0.sample_index
       pct = samples_sent / total_samples * 100
       print(
@@ -117,11 +127,6 @@ def run_simulation(lead0_samples, lead1_samples, is_fixed: bool):
 
     uploaders_done = not uploader0.active and not uploader1.active
     fifo_empty = fifo0.is_empty() and fifo1.is_empty()
-    # Pipeline is drained when ALL units have completed all work:
-    # - No data in flight (input_data, output_data both None)
-    # - No active computations (busy = False)
-    # - No queued work (fifo empty, uploader done)
-    # The key is checking cycles_remaining for units that may be mid-computation
     pipeline_drained = all(
       not u.busy and u.output_data is None and u.input_data is None 
       and getattr(u, 'cycles_remaining', 0) == 0 and getattr(u, 'kernel_cycles_remaining', 0) == 0 #ensure all done to stop 1 sample missing
@@ -131,11 +136,12 @@ def run_simulation(lead0_samples, lead1_samples, is_fixed: bool):
     if uploaders_done and fifo_empty and pipeline_drained:
       break
 
-  print(
-    f"  [{mode}] Done — total cycles={clock.cycle} | "
-    f"peaks0={len(threshold0.peaks)} peaks1={len(threshold1.peaks)} | "
-    f"dropped0={fifo0.dropped_samples} dropped1={fifo1.dropped_samples}"
-  )
+  if verbose:
+    print(
+      f"  [{mode}] Done — total cycles={clock.cycle} | "
+      f"peaks0={len(threshold0.peaks)} peaks1={len(threshold1.peaks)} | "
+      f"dropped0={fifo0.dropped_samples} dropped1={fifo1.dropped_samples}"
+    )
 
   bpm0 = threshold0.get_bpm()
   bpm1 = threshold1.get_bpm()
