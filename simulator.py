@@ -12,11 +12,8 @@ from threshold_unit import ThresholdUnit
 from data_recorder import DataRecorder
 from config import (
   FIXED_POINT_SCALE, SAMPLE_RATE,
-  CYCLES_PER_SAMPLE, FIFO_SIZE, DATA_RECORDER_CAPACITY,
-  MAX_SAMPLES
+  CYCLES_PER_SAMPLE, FIFO_SIZE, DATA_RECORDER_CAPACITY
 )
-
-# --- Data loading helpers ---
 
 def get_patient_bpm(patient_number, data_dir="ecg_data"):
   record_path = f"{data_dir}/patient_{patient_number}/{patient_number}"
@@ -28,18 +25,11 @@ def get_patient_bpm(patient_number, data_dir="ecg_data"):
 
 def load_data(record_path: str):
   record = wfdb.rdrecord(record_path)
-  lead0 = record.p_signal[:, 0].astype(np.float32)[:MAX_SAMPLES]
-  lead1 = record.p_signal[:, 1].astype(np.float32)[:MAX_SAMPLES]
+  lead0 = record.p_signal[:, 0].astype(np.float32)
+  lead1 = record.p_signal[:, 1].astype(np.float32)
   return lead0, lead1
 
-# --- Pipeline builder ---
-
 def build_lane(name: str, samples: np.ndarray, is_fixed: bool, cycles_per_sample: int):
-  """
-  Builds one complete processing lane for a single ECG lead.
-  Returns (units_list, fifo, mac, threshold, recorders_dict)
-  """
-  # Recorders
   raw_recorder       = DataRecorder(f"{name}_raw",       DATA_RECORDER_CAPACITY)
   lp_recorder        = DataRecorder(f"{name}_lp",        DATA_RECORDER_CAPACITY)
   hp_recorder        = DataRecorder(f"{name}_hp",        DATA_RECORDER_CAPACITY)
@@ -48,15 +38,13 @@ def build_lane(name: str, samples: np.ndarray, is_fixed: bool, cycles_per_sample
   mwi_recorder       = DataRecorder(f"{name}_mwi",       DATA_RECORDER_CAPACITY)
   threshold_recorder = DataRecorder(f"{name}_threshold", DATA_RECORDER_CAPACITY)
 
-  # Hardware units
   fifo      = InputFIFO(f"{name}_fifo", FIFO_SIZE)
-  uploader  = DataUploader(f"{name}_uploader", samples, cycles_per_sample, fifo)
   mac       = MACUnit(f"{name}_mac", fifo, is_fixed_point=is_fixed)
+  uploader  = DataUploader(f"{name}_uploader", samples, cycles_per_sample, fifo, mac)
   squaring  = SquaringUnit(f"{name}_squaring", is_fixed_point=is_fixed)
   mwi       = MWIUnit(f"{name}_mwi", is_fixed_point=is_fixed)
   threshold = ThresholdUnit(f"{name}_threshold", SAMPLE_RATE, is_fixed_point=is_fixed)
 
-  # Attach recorders
   mac.attach_raw_recorder(raw_recorder)
   mac.attach_lp_recorder(lp_recorder)
   mac.attach_hp_recorder(hp_recorder)
@@ -65,78 +53,60 @@ def build_lane(name: str, samples: np.ndarray, is_fixed: bool, cycles_per_sample
   mwi.attach_recorder(mwi_recorder)
   threshold.attach_recorder(threshold_recorder)
 
-  # Wire pipeline
   mac.connect(squaring).connect(mwi).connect(threshold)
 
-  units = [uploader, fifo, mac, squaring, mwi, threshold]
-
   recorders = {
-    "raw":       raw_recorder,
-    "lp":        lp_recorder,
-    "hp":        hp_recorder,
-    "dv":        dv_recorder,
-    "squaring":  squaring_recorder,
-    "mwi":       mwi_recorder,
-    "threshold": threshold_recorder,
+    "raw": raw_recorder, "lp": lp_recorder, "hp": hp_recorder,
+    "dv": dv_recorder, "squaring": squaring_recorder,
+    "mwi": mwi_recorder, "threshold": threshold_recorder,
   }
 
-  return units, fifo, mac, threshold, recorders
-
-# --- Simulation runner ---
+  return uploader, fifo, mac, squaring, mwi, threshold, recorders
 
 def run_simulation(lead0_samples, lead1_samples, is_fixed: bool):
   mode = "Fixed" if is_fixed else "Float"
   total_samples = len(lead0_samples)
 
-  units0, fifo0, mac0, threshold0, recorders0 = build_lane("lane0", lead0_samples, is_fixed, CYCLES_PER_SAMPLE)
-  units1, fifo1, mac1, threshold1, recorders1 = build_lane("lane1", lead1_samples, is_fixed, CYCLES_PER_SAMPLE)
+  up0, fifo0, mac0, sq0, mwi0, thresh0, rec0 = build_lane("lane0", lead0_samples, is_fixed, CYCLES_PER_SAMPLE)
+  up1, fifo1, mac1, sq1, mwi1, thresh1, rec1 = build_lane("lane1", lead1_samples, is_fixed, CYCLES_PER_SAMPLE)
 
   clock = ClockUnit()
-  clock.subscribe_many(units0)
-  clock.subscribe_many(units1)
 
-  uploader0, uploader1 = units0[0], units1[0]
-
-  # Run until both uploaders are done and all units have drained
-  all_units = units0 + units1
-  log_interval = CYCLES_PER_SAMPLE * 1000  # log every 1000 samples worth of cycles
-  while True:
-    clock.tick()
-
-    # Log progress every 1000 samples
-    if clock.cycle % log_interval == 0:
-      samples_sent = uploader0.sample_index
+  # Progress logging every 10% of samples
+  log_every = total_samples // 10
+  last_logged = [0]
+  def on_progress(cycle):
+    samples_sent = up0.sample_index
+    if samples_sent - last_logged[0] >= log_every:
+      last_logged[0] = samples_sent
       pct = samples_sent / total_samples * 100
       print(
-        f"  [{mode}] cycle={clock.cycle:>8} | "
+        f"  [{mode}] cycle={cycle:>10} | "
         f"samples={samples_sent}/{total_samples} ({pct:5.1f}%) | "
-        f"fifo0_depth={fifo0.max_depth} fifo1_depth={fifo1.max_depth} | "
-        f"peaks0={len(threshold0.peaks)} peaks1={len(threshold1.peaks)}"
+        f"peaks0={len(thresh0.peaks)} peaks1={len(thresh1.peaks)}"
       )
 
-    uploaders_done = not uploader0.active and not uploader1.active
-    fifo_empty = fifo0.is_empty() and fifo1.is_empty()
-    pipeline_drained = all(
-      not u.busy and u.output_data is None and u.input_data is None
-      for u in all_units
-      if hasattr(u, 'busy')
-    )
-    if uploaders_done and fifo_empty and pipeline_drained:
-      break
+  # Kick off both uploaders
+  up0.start(clock)
+  up1.start(clock)
+
+  clock.run(on_progress=on_progress)
 
   print(
-    f"  [{mode}] Done — total cycles={clock.cycle} | "
-    f"peaks0={len(threshold0.peaks)} peaks1={len(threshold1.peaks)} | "
+    f"  [{mode}] Done — final cycle={clock.cycle} | "
+    f"peaks0={len(thresh0.peaks)} peaks1={len(thresh1.peaks)} | "
     f"dropped0={fifo0.dropped_samples} dropped1={fifo1.dropped_samples}"
   )
 
-  bpm0 = threshold0.get_bpm()
-  bpm1 = threshold1.get_bpm()
+  bpm0 = thresh0.get_bpm()
+  bpm1 = thresh1.get_bpm()
   avg_bpm = (bpm0 + bpm1) / 2 if bpm0 > 0 and bpm1 > 0 else max(bpm0, bpm1)
 
-  return recorders0, recorders1, threshold0, threshold1, avg_bpm, clock, units0, units1
+  all_units = [up0, mac0, sq0, mwi0, thresh0, up1, mac1, sq1, mwi1, thresh1]
+  lane0_units = [up0, mac0, sq0, mwi0, thresh0]
+  lane1_units = [up1, mac1, sq1, mwi1, thresh1]
 
-# --- Reporting ---
+  return rec0, rec1, thresh0, thresh1, avg_bpm, clock, lane0_units, lane1_units, fifo0, fifo1
 
 def print_performance(units: list, label: str):
   print(f"\n{label} Performance:")
@@ -146,31 +116,20 @@ def print_performance(units: list, label: str):
     if hasattr(u, 'busy_cycles'):
       print(f"  {u.name:<30} {u.busy_cycles:>8} {u.idle_cycles:>8} {u.stalled_cycles:>8} {u.utilization:>8.1%}")
 
-def print_fifo_stats(fifo: InputFIFO, label: str):
-  print(f"\n{label} FIFO Stats:")
-  print(f"  Max depth reached: {fifo.max_depth}/{fifo.capacity}")
-  print(f"  Dropped samples:   {fifo.dropped_samples}")
-
-# --- Plotting ---
-
 def plot_recorders(recorders: dict, label: str):
   stages = ["raw", "lp", "hp", "dv", "squaring", "mwi", "threshold"]
   n = len(stages)
   fig, axes = plt.subplots(n, 1, figsize=(12, 3*n), sharex=True)
-
   for ax, stage in zip(axes, stages):
     signal = recorders[stage].get_signal()
     ax.plot(signal)
     ax.set_title(recorders[stage].name)
     ax.set_ylabel("Amplitude")
     ax.grid(True, alpha=0.3)
-
   axes[-1].set_xlabel("Sample")
   plt.suptitle(label, fontsize=16)
   plt.tight_layout()
   plt.show()
-
-# --- RMSE analysis ---
 
 def compute_rmse(float_recorders, fixed_recorders):
   stages = ["raw", "lp", "hp", "dv", "squaring", "mwi"]
@@ -184,8 +143,6 @@ def compute_rmse(float_recorders, fixed_recorders):
     rmse = np.sqrt(np.mean((f_sig[:min_len] - x_sig[:min_len])**2))
     print(f"  {stage:<12} RMSE: {rmse:.8f}")
 
-# --- Entry point ---
-
 if __name__ == "__main__":
   patient_number = 116
   record_path = f"ecg_data/patient_{patient_number}/{patient_number}"
@@ -197,41 +154,32 @@ if __name__ == "__main__":
   actual_bpm = get_patient_bpm(patient_number)
 
   print("Running Floating Point Simulation...")
-  f_rec0, f_rec1, f_thresh0, f_thresh1, float_bpm, f_clock, f_units0, f_units1 = \
+  f_rec0, f_rec1, f_thresh0, f_thresh1, float_bpm, f_clock, f_units0, f_units1, f_fifo0, f_fifo1 = \
     run_simulation(float_lead0, float_lead1, is_fixed=False)
 
-  print("Running Fixed Point Simulation...")
-  x_rec0, x_rec1, x_thresh0, x_thresh1, fixed_bpm, x_clock, x_units0, x_units1 = \
+  print("\nRunning Fixed Point Simulation...")
+  x_rec0, x_rec1, x_thresh0, x_thresh1, fixed_bpm, x_clock, x_units0, x_units1, x_fifo0, x_fifo1 = \
     run_simulation(fixed_lead0, fixed_lead1, is_fixed=True)
 
-  # Results
   print(f"\nPatient #{patient_number}:")
   print(f"  Actual BPM (Database): {actual_bpm}")
   print(f"  Float Mode BPM:        {float_bpm:.1f}")
   print(f"  Fixed Mode BPM:        {fixed_bpm:.1f}")
-  print(f"\n  Float total cycles: {f_clock.cycle}")
-  print(f"  Fixed total cycles: {x_clock.cycle}")
+  print(f"\n  Float final cycle: {f_clock.cycle}")
+  print(f"  Fixed final cycle: {x_clock.cycle}")
 
-  # Performance metrics
   print_performance(f_units0, "Float Lane 0")
   print_performance(f_units1, "Float Lane 1")
   print_performance(x_units0, "Fixed Lane 0")
   print_performance(x_units1, "Fixed Lane 1")
 
-  # FIFO stats
-  print_fifo_stats(f_units0[1], "Float Lane 0")
-  print_fifo_stats(f_units1[1], "Float Lane 1")
-  print_fifo_stats(x_units0[1], "Fixed Lane 0")
-  print_fifo_stats(x_units1[1], "Fixed Lane 1")
+  print(f"\nFIFO Stats:")
+  print(f"  Float Lane 0: max_depth={f_fifo0.max_depth} dropped={f_fifo0.dropped_samples}")
+  print(f"  Float Lane 1: max_depth={f_fifo1.max_depth} dropped={f_fifo1.dropped_samples}")
+  print(f"  Fixed Lane 0: max_depth={x_fifo0.max_depth} dropped={x_fifo0.dropped_samples}")
+  print(f"  Fixed Lane 1: max_depth={x_fifo1.max_depth} dropped={x_fifo1.dropped_samples}")
 
-  # RMSE
   compute_rmse(f_rec0, x_rec0)
 
-  # Plots
-
-  # TODO: Lead 1 is not plotting correctly
-  # plot_recorders(f_rec0, f"Patient {patient_number} - Float Lane 0")
-  # plot_recorders(f_rec1, f"Patient {patient_number} - Float Lane 1")
-
-  # plot_recorders(x_rec0, f"Patient {patient_number} - Fixed Lane 0")
-  # plot_recorders(x_rec1, f"Patient {patient_number} - Fixed Lane 1")
+  plot_recorders(f_rec0, f"Patient {patient_number} - Float Lane 0")
+  plot_recorders(x_rec0, f"Patient {patient_number} - Fixed Lane 0")
