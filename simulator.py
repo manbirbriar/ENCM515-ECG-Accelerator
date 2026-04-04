@@ -13,7 +13,8 @@ from data_recorder import DataRecorder
 from config import (
   FIXED_POINT_SCALE, SAMPLE_RATE,
   CYCLES_PER_SAMPLE, FIFO_SIZE, DATA_RECORDER_CAPACITY,
-  MAX_SAMPLES
+  MAX_SAMPLES, BATTERY_CAPACITY_MAH, BATTERY_VOLTAGE,
+  DYNAMIC_POWER_UW_PER_MHZ
 )
 
 # --- Data loading helpers ---
@@ -116,8 +117,14 @@ def run_simulation(lead0_samples, lead1_samples, is_fixed: bool):
 
     uploaders_done = not uploader0.active and not uploader1.active
     fifo_empty = fifo0.is_empty() and fifo1.is_empty()
+    # Pipeline is drained when ALL units have completed all work:
+    # - No data in flight (input_data, output_data both None)
+    # - No active computations (busy = False)
+    # - No queued work (fifo empty, uploader done)
+    # The key is checking cycles_remaining for units that may be mid-computation
     pipeline_drained = all(
-      not u.busy and u.output_data is None and u.input_data is None
+      not u.busy and u.output_data is None and u.input_data is None 
+      and getattr(u, 'cycles_remaining', 0) == 0 and getattr(u, 'kernel_cycles_remaining', 0) == 0 #ensure all done to stop 1 sample missing
       for u in all_units
       if hasattr(u, 'busy')
     )
