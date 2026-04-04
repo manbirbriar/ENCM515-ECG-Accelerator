@@ -8,7 +8,7 @@ SAMPLE_RATE: int = 360 # Hz
 # Hardware clock frequency
 # Real DSP hardware runs much faster than the sample rate
 # A multiple of SAMPLE_RATE which ensures that CYCLES_PER_SAMPLE has no rounding error
-CLOCK_FREQUENCY: int = 200160 # Hz 
+CLOCK_FREQUENCY: int = 360000 # Hz 
 # How many clock cycles are available per incoming sample
 CYCLES_PER_SAMPLE: int = CLOCK_FREQUENCY // SAMPLE_RATE
 
