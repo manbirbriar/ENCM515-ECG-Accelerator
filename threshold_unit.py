@@ -26,6 +26,10 @@ class ThresholdUnit(HardwareUnit):
     - prev1 was above threshold
     - refractory period has elapsed
     - signal was above threshold for MIN_PEAK_WIDTH consecutive samples
+
+  NPKI update follows original Pan-Tompkins:
+    - Only updates on local maxima (rising then falling) that were NOT confirmed peaks
+    - This prevents NPKI collapsing to zero between beats when signal is flat
   """
   def __init__(self, name: str, sample_rate: int, is_fixed_point: bool):
 
@@ -76,9 +80,10 @@ class ThresholdUnit(HardwareUnit):
 
   def compute(self, sample) -> float:
     # --- Peak detector logic ---
-    rising       = self.prev1 > self.prev2
-    falling      = sample < self.prev1
-    above        = self.prev1 > self.threshold
+    rising        = self.prev1 > self.prev2
+    falling       = sample < self.prev1
+    local_max     = rising and falling          # prev1 is a local maximum
+    above         = self.prev1 > self.threshold
     refractory_ok = (self.sample_count - self.last_peak_sample) > REFRACTORY_SAMPLES
 
     # Track consecutive samples above threshold for noise rejection
@@ -89,15 +94,20 @@ class ThresholdUnit(HardwareUnit):
 
     width_ok = self.above_threshold_count >= MIN_PEAK_WIDTH
 
-    if rising and falling and above and refractory_ok and width_ok:
-      # Confirmed peak — update signal estimate
+    if local_max and above and refractory_ok and width_ok:
+      # Confirmed QRS peak — update signal peak estimate with prev1
       self.peaks.append(self.sample_count)
       self.last_peak_sample = self.sample_count
       self.spki = 0.125 * self.prev1 + 0.875 * self.spki
       detection_event = 1.0
+    elif local_max:
+      # Local maximum that was NOT a QRS peak — update noise estimate with prev1
+      # This is the key fix: NPKI only updates on local maxima, not every sample.
+      # Using prev1 (the local max value) instead of sample (which may be near zero)
+      # prevents NPKI from collapsing between beats.
+      self.npki = 0.125 * self.prev1 + 0.875 * self.npki
+      detection_event = 0.0
     else:
-      # Not a peak — update noise estimate
-      self.npki = 0.125 * sample + 0.875 * self.npki
       detection_event = 0.0
 
     # Update adaptive threshold

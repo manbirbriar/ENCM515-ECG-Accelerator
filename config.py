@@ -1,15 +1,16 @@
 # Fixed-point scaling
-FIXED_POINT_SCALE = 2**15 - 1
 FIXED_POINT_BITS = 15
+FIXED_POINT_SCALE = 2**FIXED_POINT_BITS - 1
 
 # MIT-BIH dataset sample rate
 SAMPLE_RATE: int = 360 # Hz
 
 # Hardware clock frequency
 # Real DSP hardware runs much faster than the sample rate
-# This determines how many clock cycles are available per incoming sample
-CLOCK_FREQUENCY: int = 200000 # Hz
-CYCLES_PER_SAMPLE: int = CLOCK_FREQUENCY // SAMPLE_RATE # 1000 cycles per sample
+# A multiple of SAMPLE_RATE which ensures that CYCLES_PER_SAMPLE has no rounding error
+CLOCK_FREQUENCY: int = 200160 # Hz 
+# How many clock cycles are available per incoming sample
+CYCLES_PER_SAMPLE: int = CLOCK_FREQUENCY // SAMPLE_RATE
 
 # QRS complex typically lasts between 80ms - 120ms
 # Use 150ms to ensure the entire complex is captured
@@ -18,8 +19,7 @@ MWI_WINDOW_SIZE: int = int(SAMPLE_RATE * 0.15) # 54 samples
 
 # FIFO buffer between DataUploader and MACUnit
 # Must be deep enough to absorb samples while MAC is busy
-# Safe sizing: 2x cycles per sample
-FIFO_SIZE: int = CYCLES_PER_SAMPLE * 2 # 200 slots
+FIFO_SIZE: int = CYCLES_PER_SAMPLE * 2
 
 # Threshold unit peak detection parameters
 MIN_PEAK_WIDTH: int = 3 # consecutive samples above threshold to confirm peak

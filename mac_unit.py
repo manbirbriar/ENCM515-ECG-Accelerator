@@ -5,8 +5,7 @@ from fifo import InputFIFO
 from data_recorder import DataRecorder
 from config import (
   FIXED_ADD_CYCLES, FIXED_SUB_CYCLES, FIXED_SHIFT_CYCLES,
-  FLOAT_ADD_CYCLES, FLOAT_SUB_CYCLES, FLOAT_MUL_CYCLES,
-  FIXED_POINT_BITS
+  FLOAT_ADD_CYCLES, FLOAT_SUB_CYCLES, FLOAT_MUL_CYCLES
 )
 
 # Internal state machine states
