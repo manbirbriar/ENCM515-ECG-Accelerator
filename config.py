@@ -40,9 +40,17 @@ FIXED_MUL_CYCLES: int = 1
 FIXED_DIV_CYCLES: int = 7
 FIXED_SHIFT_CYCLES: int = 1
 FIXED_COMPARE_CYCLES: int = 1
+FIXED_MAC_CYCLES: int = 1
 
 FLOAT_ADD_CYCLES: int = 31
 FLOAT_SUB_CYCLES: int = 39
 FLOAT_MUL_CYCLES: int = 26
 FLOAT_DIV_CYCLES: int = 53
 FLOAT_COMPARE_CYCLES: int = 13
+FLOAT_MAC_CYCLES: int = 60
+
+# Battery and power model parameters
+# ARM Cortex-M4 40LP @ 1.1V (typical wearable configuration)
+BATTERY_CAPACITY_MAH: int = 225  # CR2032 coin cell
+BATTERY_VOLTAGE: float = 1.1  # Volts (ARM 40LP nominal)
+DYNAMIC_POWER_UW_PER_MHZ: float = 12.26  # µW/MHz @ 1.1V (from ARM datasheet)
