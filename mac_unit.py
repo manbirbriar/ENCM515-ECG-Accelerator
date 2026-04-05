@@ -1,44 +1,35 @@
-from __future__ import annotations
 from hardware_unit import HardwareUnit
 from circular_buffer import CircularBuffer
 from fifo_buffer import FIFOBuffer
 from data_recorder import DataRecorder
 from config import FIXED_MAC_CYCLES, FLOAT_MAC_CYCLES
 
-# Internal state machine states
-IDLE         = "IDLE"
-LP_BUSY      = "LP_BUSY"
-HP_BUSY      = "HP_BUSY"
-DV_BUSY      = "DV_BUSY"
+IDLE = "IDLE"
+LP_BUSY = "LP_BUSY"
+HP_BUSY = "HP_BUSY"
+DV_BUSY = "DV_BUSY"
 
 class MACUnit(HardwareUnit):
   """
-  Time-multiplexed MAC (Multiply-Accumulate) unit that runs three FIR/IIR filter 
-  kernels sequentially using actual MAC operations:
-    1. Low-pass filter:   y[n] = 2*y[n-1] - y[n-2] + x[n] - 2*x[n-6] + x[n-12]
-                          Coefficients: [2, -1, 1, -2, 1] applied via MAC
-    2. High-pass filter:  y[n] = y[n-1] - (1/32)*x[n] + x[n-16] - x[n-17] + (1/32)*x[n-32]
-                          Coefficients: [1, -1/32, 1, -1, 1/32] applied via MAC
-    3. Derivative filter: y[n] = (1/8)*[2*x[n] + x[n-1] - x[n-3] - 2*x[n-4]]
-                          Coefficients: [1/8*2, 1/8, -1/8, -1/8*2] applied via MAC
+  MAC unit that runs three FIR/IIR filter kernels sequentially using MAC operations:
+  1. Low-pass filter:   y[n] = 2*y[n-1] - y[n-2] + x[n] - 2*x[n-6] + x[n-12]
+  Coefficients: [2, -1, 1, -2, 1] 
+  2. High-pass filter:  y[n] = y[n-1] - (1/32)*x[n] + x[n-16] - x[n-17] + (1/32)*x[n-32]
+  Coefficients: [1, -1/32, 1, -1, 1/32] 
+  3. Derivative filter: y[n] = (1/8)*[2*x[n] + x[n-1] - x[n-3] - 2*x[n-4]]
+  Coefficients: [1/8*2, 1/8, -1/8, -1/8*2]
 
-  A single multiplier and accumulator are shared across all three kernels.
-  The program sequencer loads the appropriate coefficients and reads from the
-  appropriate history buffer for each kernel. Each MAC operation processes
-  one coefficient*sample pair and accumulates into a result register.
-
-  History buffers:
-    input_buffer[13]  raw ECG history          (LP reads from here)
-    lp_buffer[33]     LP output history         (HP reads from here)
-    hp_buffer[5]      HP output history         (Derivative reads from here)
+  Circular history buffers:
+  input_buffer[13] raw ECG history (LP reads from here)
+  lp_buffer[33] LP output history (HP reads from here)
+  hp_buffer[5] HP output history (Derivative reads from here)
 
   IIR state registers:
-    lp_y1, lp_y2      LowPass recurrence state
-    hp_y1             HighPass recurrence state
+  lp_y1, lp_y2  LowPass recurrence state
+  hp_y1  HighPass recurrence state
   """
-  def __init__(self, name: str, fifo: FIFOBuffer, is_fixed_point: bool):
 
-    # Per-sample latency for each kernel using MAC operations
+  def __init__(self, name: str, fifo: FIFOBuffer, is_fixed_point: bool):
     if is_fixed_point:
       # LowPass: 5 MAC operations (2 IIR coefficients + 3 FIR coefficients)
       # y[n] = 2*y[n-1] - y[n-2] + x[n] - 2*x[n-6] + x[n-12]
@@ -62,40 +53,36 @@ class MACUnit(HardwareUnit):
 
     self.fifo = fifo
 
-    # Internal history buffers (shift registers in hardware)
+    #Internal history buffers (shift registers in hardware)
     self.input_buffer = CircularBuffer(13, dtype=int if is_fixed_point else float)
-    self.lp_buffer    = CircularBuffer(33, dtype=int if is_fixed_point else float)
-    self.hp_buffer    = CircularBuffer(5,  dtype=int if is_fixed_point else float)
+    self.lp_buffer = CircularBuffer(33, dtype=int if is_fixed_point else float)
+    self.hp_buffer = CircularBuffer(5,  dtype=int if is_fixed_point else float)
 
-    # IIR state registers
+    #IIR state registers
     self.lp_y1 = 0
     self.lp_y2 = 0
     self.hp_y1 = 0
 
-    # Internal state machine
+    #Internal state machine
     self.state = IDLE
     self.kernel_cycles_remaining = 0
 
-    # Intermediate kernel results
+    #Intermediate kernel results
     self._current_sample = None
     self._lp_result = None
     self._hp_result = None
 
-    # Optional per-stage recorders
     self.raw_recorder: DataRecorder | None = None
-    self.lp_recorder:  DataRecorder | None = None
-    self.hp_recorder:  DataRecorder | None = None
-    self.dv_recorder:  DataRecorder | None = None
+    self.lp_recorder: DataRecorder | None = None
+    self.hp_recorder: DataRecorder | None = None
+    self.dv_recorder: DataRecorder | None = None
 
   def attach_raw_recorder(self, recorder: DataRecorder) -> None:
     self.raw_recorder = recorder
-
   def attach_lp_recorder(self, recorder: DataRecorder) -> None:
     self.lp_recorder = recorder
-
   def attach_hp_recorder(self, recorder: DataRecorder) -> None:
     self.hp_recorder = recorder
-
   def attach_dv_recorder(self, recorder: DataRecorder) -> None:
     self.dv_recorder = recorder
 
@@ -117,11 +104,10 @@ class MACUnit(HardwareUnit):
     """
     self.input_buffer.push(sample)
 
-    x_n   = self.input_buffer[-1]
-    x_n6  = self.input_buffer[-7]
+    x_n = self.input_buffer[-1]
+    x_n6 = self.input_buffer[-7]
     x_n12 = self.input_buffer[-13]
 
-    # MAC accumulation
     accumulator = 0
     if self.is_fixed_point:
       accumulator += 2 * int(self.lp_y1)
@@ -162,19 +148,19 @@ class MACUnit(HardwareUnit):
     """
     self.lp_buffer.push(lp_sample)
 
-    x_n   = self.lp_buffer[-1]
+    x_n = self.lp_buffer[-1]
     x_n16 = self.lp_buffer[-17]
     x_n17 = self.lp_buffer[-18]
     x_n32 = self.lp_buffer[-33]
 
-    # MAC accumulation
+
     accumulator = 0
     if self.is_fixed_point:
       accumulator += 1 * int(self.hp_y1)
-      accumulator += -1 * (int(x_n) >> 5)         # -1/32 via right shift by 5
+      accumulator += -1 * (int(x_n) >> 5)#-1/32 by right shift by 5
       accumulator += 1 * int(x_n16)
       accumulator += -1 * int(x_n17)
-      accumulator += 1 * (int(x_n32) >> 5)        # 1/32 via right shift by 5
+      accumulator += 1 * (int(x_n32) >> 5)#1/32 by right shift by 5
       y_n = int(accumulator)
     else:
       accumulator += 1.0 * self.hp_y1
@@ -198,15 +184,15 @@ class MACUnit(HardwareUnit):
     
     Implemented as MAC accumulation with coefficients (all scaled by 1/8):
     accumulator = 0
-    accumulator += 2/8 * x[n]         (MAC: coeff=1/4, sample=x_n)
-    accumulator += 1/8 * x[n-1]       (MAC: coeff=1/8, sample=x_n1)
-    accumulator += -1/8 * x[n-3]      (MAC: coeff=-1/8, sample=x_n3)
-    accumulator += -2/8 * x[n-4]      (MAC: coeff=-1/4, sample=x_n4)
+    accumulator += 2/8 * x[n] (MAC: coeff=1/4, sample=x_n)
+    accumulator += 1/8 * x[n-1] (MAC: coeff=1/8, sample=x_n1)
+    accumulator += -1/8 * x[n-3] (MAC: coeff=-1/8, sample=x_n3)
+    accumulator += -2/8 * x[n-4] (MAC: coeff=-1/4, sample=x_n4)
     y[n] = accumulator
     """
     self.hp_buffer.push(hp_sample)
 
-    x_n  = self.hp_buffer[-1]
+    x_n = self.hp_buffer[-1]
     x_n1 = self.hp_buffer[-2]
     x_n3 = self.hp_buffer[-4]
     x_n4 = self.hp_buffer[-5]
@@ -230,17 +216,15 @@ class MACUnit(HardwareUnit):
 
     if self.dv_recorder:
       self.dv_recorder.record(y_n)
-
     return y_n
 
-  # --- State machine tick ---
 
   def tick(self, current_cycle: int) -> None:
-    # Try to hand off any pending output first
+    #Try to hand off any pending output first
     if self.output_data is not None:
       self.handoff_to_next()
 
-    # If handoff failed, we are stalled — nothing else to do this cycle
+    #If handoff failed we are stalled
     if self.output_data is not None:
       self.stalled_cycles += 1
       return
@@ -287,7 +271,7 @@ class MACUnit(HardwareUnit):
 
         self.handoff_to_next()
 
-        # If handoff failed downstream was busy at completion — count as stall
+        #If handoff failed downstream was busy at completion count it as a stall
         if self.output_data is not None:
           self.stalled_cycles += 1
 
@@ -297,16 +281,5 @@ class MACUnit(HardwareUnit):
   def is_stalled(self) -> bool:
     return self.output_data is not None
 
-  # compute() unused — MAC overrides tick() directly
   def compute(self, data):
     return data
-
-  def __repr__(self) -> str:
-    return (
-      f"<MACUnit name={self.name} "
-      f"state={self.state} "
-      f"busy_cycles={self.busy_cycles} "
-      f"idle_cycles={self.idle_cycles} "
-      f"stalled_cycles={self.stalled_cycles} "
-      f"utilization={self.utilization:.1%}>"
-    )
