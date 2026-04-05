@@ -3,10 +3,8 @@ from hardware_unit import HardwareUnit
 
 class ClockUnit:
   """
-  Global clock. Every HardwareUnit must be registered before simulation runs.
-  On each tick(), increments cycle counter and calls tick() on every registered unit.
-  Units are ticked in reverse registration order (back-to-front) to prevent
-  artificial 1-cycle delays between connected units.
+  Global clock. On each tick(), increments cycle counter and calls tick() on every registered unit.
+  Units are ticked in reverse registration order (back-to-front) to prevent 1-cycle delays between connected units.
   """
   def __init__(self):
     self.cycle: int = 0

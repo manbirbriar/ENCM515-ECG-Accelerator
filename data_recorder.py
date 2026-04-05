@@ -4,10 +4,10 @@ class DataRecorder:
   def __init__(self, name: str, capacity: int):
     self.name = name
     self.capacity = capacity
-    # Automatically removes oldest sample when capacity is reached
+    # Removes oldest sample when capacity is reached
     self.buffer: deque = deque(maxlen=capacity)
 
-  # Record a single scalar sample
+  # Records a single sample
   def record(self, sample) -> None:
     self.buffer.append(sample)
 

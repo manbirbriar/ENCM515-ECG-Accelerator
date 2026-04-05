@@ -11,24 +11,30 @@ DV_BUSY = "DV_BUSY"
 
 class MACUnit(HardwareUnit):
   """
-  MAC unit that runs three FIR/IIR filter kernels sequentially using MAC operations:
-  1. Low-pass filter:   y[n] = 2*y[n-1] - y[n-2] + x[n] - 2*x[n-6] + x[n-12]
-  Coefficients: [2, -1, 1, -2, 1] 
-  2. High-pass filter:  y[n] = y[n-1] - (1/32)*x[n] + x[n-16] - x[n-17] + (1/32)*x[n-32]
-  Coefficients: [1, -1/32, 1, -1, 1/32] 
-  3. Derivative filter: y[n] = (1/8)*[2*x[n] + x[n-1] - x[n-3] - 2*x[n-4]]
+  MAC unit that runs three FIR/IIR filter kernels sequentially using MAC operations.
+  A time-multiplexed design was chosen over three dedicated MACs to minimise hardware area.
+
+  1.
+  Low-pass filter: y[n] = 2*y[n-1] - y[n-2] + x[n] - 2*x[n-6] + x[n-12]
+  Coefficients: [2, -1, 1, -2, 1]
+
+  2.
+  High-pass filter: y[n] = y[n-1] - (1/32)*x[n] + x[n-16] - x[n-17] + (1/32)*x[n-32]
+  Coefficients: [1, -1/32, 1, -1, 1/32]
+
+  3.
+  Derivative filter: y[n] = (1/8)*[2*x[n] + x[n-1] - x[n-3] - 2*x[n-4]]
   Coefficients: [1/8*2, 1/8, -1/8, -1/8*2]
 
   Circular history buffers:
-  input_buffer[13] raw ECG history (LP reads from here)
-  lp_buffer[33] LP output history (HP reads from here)
-  hp_buffer[5] HP output history (Derivative reads from here)
+  1. lp_buffer[13]
+  2. hp_buffer[33]
+  3. dv_buffer[5]
 
   IIR state registers:
-  lp_y1, lp_y2  LowPass recurrence state
-  hp_y1  HighPass recurrence state
+  LowPass: lp_y1, lp_y2
+  HighPass: hp_y1
   """
-
   def __init__(self, name: str, fifo: FIFOBuffer, is_fixed_point: bool):
     if is_fixed_point:
       # LowPass: 5 MAC operations (2 IIR coefficients + 3 FIR coefficients)
@@ -54,9 +60,9 @@ class MACUnit(HardwareUnit):
     self.fifo = fifo
 
     #Internal history buffers (shift registers in hardware)
-    self.input_buffer = CircularBuffer(13, dtype=int if is_fixed_point else float)
-    self.lp_buffer = CircularBuffer(33, dtype=int if is_fixed_point else float)
-    self.hp_buffer = CircularBuffer(5,  dtype=int if is_fixed_point else float)
+    self.lp_buffer = CircularBuffer(13, dtype=int if is_fixed_point else float)
+    self.hp_buffer = CircularBuffer(33, dtype=int if is_fixed_point else float)
+    self.dv_buffer = CircularBuffer(5,  dtype=int if is_fixed_point else float)
 
     #IIR state registers
     self.lp_y1 = 0
@@ -86,8 +92,6 @@ class MACUnit(HardwareUnit):
   def attach_dv_recorder(self, recorder: DataRecorder) -> None:
     self.dv_recorder = recorder
 
-  # --- Kernel implementations ---
-
   def _run_lp_kernel(self, sample) -> int | float:
     """
     Low-Pass Filter using MAC operations:
@@ -102,11 +106,11 @@ class MACUnit(HardwareUnit):
     accumulator += 1 * x[n-12]     (MAC: coeff=1, sample=x_n12)
     y[n] = accumulator
     """
-    self.input_buffer.push(sample)
+    self.lp_buffer.push(sample)
 
-    x_n = self.input_buffer[-1]
-    x_n6 = self.input_buffer[-7]
-    x_n12 = self.input_buffer[-13]
+    x_n = self.lp_buffer[-1]
+    x_n6 = self.lp_buffer[-7]
+    x_n12 = self.lp_buffer[-13]
 
     accumulator = 0
     if self.is_fixed_point:
@@ -146,21 +150,21 @@ class MACUnit(HardwareUnit):
     accumulator += 1/32 * x[n-32]      (MAC: coeff=1/32, sample=x_n32)
     y[n] = accumulator
     """
-    self.lp_buffer.push(lp_sample)
+    self.hp_buffer.push(lp_sample)
 
-    x_n = self.lp_buffer[-1]
-    x_n16 = self.lp_buffer[-17]
-    x_n17 = self.lp_buffer[-18]
-    x_n32 = self.lp_buffer[-33]
+    x_n = self.hp_buffer[-1]
+    x_n16 = self.hp_buffer[-17]
+    x_n17 = self.hp_buffer[-18]
+    x_n32 = self.hp_buffer[-33]
 
 
     accumulator = 0
     if self.is_fixed_point:
       accumulator += 1 * int(self.hp_y1)
-      accumulator += -1 * (int(x_n) >> 5)#-1/32 by right shift by 5
+      accumulator += -1 * (int(x_n) >> 5) # -1/32 by right shift by 5
       accumulator += 1 * int(x_n16)
       accumulator += -1 * int(x_n17)
-      accumulator += 1 * (int(x_n32) >> 5)#1/32 by right shift by 5
+      accumulator += 1 * (int(x_n32) >> 5) # 1/32 by right shift by 5
       y_n = int(accumulator)
     else:
       accumulator += 1.0 * self.hp_y1
@@ -190,12 +194,12 @@ class MACUnit(HardwareUnit):
     accumulator += -2/8 * x[n-4] (MAC: coeff=-1/4, sample=x_n4)
     y[n] = accumulator
     """
-    self.hp_buffer.push(hp_sample)
+    self.dv_buffer.push(hp_sample)
 
-    x_n = self.hp_buffer[-1]
-    x_n1 = self.hp_buffer[-2]
-    x_n3 = self.hp_buffer[-4]
-    x_n4 = self.hp_buffer[-5]
+    x_n = self.dv_buffer[-1]
+    x_n1 = self.dv_buffer[-2]
+    x_n3 = self.dv_buffer[-4]
+    x_n4 = self.dv_buffer[-5]
 
     # MAC accumulation with 1/8 scaling
     accumulator = 0

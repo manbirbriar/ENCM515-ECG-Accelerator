@@ -5,9 +5,8 @@ import numpy as np
 class DataUploader(HardwareUnit):
   """
   Models the ADC frontend of the ECG system.
-  Produces one sample every CYCLES_PER_SAMPLE clock cycles,
-  reflecting the fact that the hardware clock runs faster than the sample rate.
-  Pushes samples into the InputFIFO rather than directly into the processing pipeline.
+  Produces one sample every CYCLES_PER_SAMPLE clock cycles.
+  Pushes samples into the InputFIFO.
   """
   def __init__(self, name: str, samples: np.ndarray, cycles_per_sample: int, fifo: FIFOBuffer):
     super().__init__(name, latency_cycles=1)
@@ -30,7 +29,7 @@ class DataUploader(HardwareUnit):
       return
 
     # Only push a sample every cycles_per_sample cycles
-    # This models the ADC running at 360Hz while the hardware clock runs faster
+    # Models the ADC running at 360Hz while the hardware clock runs faster
     if current_cycle % self.cycles_per_sample != 0:
       self.idle_cycles += 1
       return
@@ -50,8 +49,4 @@ class DataUploader(HardwareUnit):
     return self.sample_index >= self.total_samples
 
   def __repr__(self) -> str:
-    return (
-      f"<DataUploader name={self.name} "
-      f"index={self.sample_index}/{self.total_samples} "
-      f"active={self.active}>"
-    )
+    return f"<DataUploader name={self.name} index={self.sample_index}/{self.total_samples} active={self.active}>"

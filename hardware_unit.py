@@ -9,13 +9,14 @@ class HardwareUnit(ABC):
     self.latency_cycles: int = latency_cycles
     self.is_fixed_point: bool = is_fixed_point
 
-    self.input_data = None    # scalar sample received from predecessor unit
-    self.output_data = None   # computed scalar result waiting to be forwarded
+    # Sample received from predeccessor
+    self.input_data = None
+    # Sample to be sent to successor
+    self.output_data = None
 
     self.busy: bool = False
     self.cycles_remaining: int = 0
 
-    # Performance tracking
     self.busy_cycles: int = 0
     self.idle_cycles: int = 0
     self.stalled_cycles: int = 0
@@ -23,19 +24,18 @@ class HardwareUnit(ABC):
     self.next_unit: HardwareUnit | None = None
     self.recorder: DataRecorder | None = None
 
-  # Wires this unit's output to next_unit
+  # Wires the current units output to next_unit
   def connect(self, next_unit: HardwareUnit) -> HardwareUnit:
     self.next_unit = next_unit
     return next_unit
 
   def tick(self, current_cycle: int) -> None:
-    # Try to hand off any pending output first
-    # Handles the case where downstream became available this cycle
+    # Try to handoff any pending output first
+    # Handles the case where successor became available this cycle
     if self.output_data is not None:
       self.handoff_to_next()
 
-    # If output still pending after handoff attempt, we are stalled
-    # Count and return — nothing else to do until downstream clears
+    # If output is still pending after handoff attempt, we are stalled
     if self.output_data is not None:
       self.stalled_cycles += 1
       return
@@ -50,7 +50,7 @@ class HardwareUnit(ABC):
       self.idle_cycles += 1
       return
 
-    # Tick down latency counter
+    # Tick latency counter
     if self.busy:
       self.busy_cycles += 1
       self.cycles_remaining -= 1
@@ -61,16 +61,19 @@ class HardwareUnit(ABC):
         self.busy = False
 
         if self.recorder:
+          # Always record outputted samples
           self.recorder.record(self.output_data)
 
         self.handoff_to_next()
 
-        # If handoff failed, downstream was busy at completion — count as stall
+        # If handoff failed, successor was busy so we stall
         if self.output_data is not None:
           self.stalled_cycles += 1
 
+  # Handoff sample to successor
   def handoff_to_next(self) -> None:
     if self.next_unit is None:
+      # Without this, the ThresholdDetector would continuously stall
       self.output_data = None
       return
 
@@ -78,6 +81,7 @@ class HardwareUnit(ABC):
       self.next_unit.input_data = self.output_data
       self.output_data = None
 
+  # Allows us to log sample data at each stage
   def attach_recorder(self, recorder: DataRecorder) -> None:
     self.recorder = recorder
 
@@ -89,20 +93,16 @@ class HardwareUnit(ABC):
   def is_available(self) -> bool:
     return not self.busy and self.input_data is None
 
-  # Unit is stalled when it has output waiting but downstream is not ready
+  # Unit is stalled when it has an output but successor is not ready
   def is_stalled(self) -> bool:
-    return not self.busy and self.output_data is not None
+    return not self.busy and self.output_data is not None and self.next_unit is not None and not self.next_unit.is_available()
 
+  # NOTE: We can use instance.utilization instead of instance.utilization()
   @property
   def utilization(self) -> float:
     total = self.busy_cycles + self.idle_cycles + self.stalled_cycles
     return self.busy_cycles / total if total > 0 else 0.0
 
   def __repr__(self) -> str:
-    return (
-      f"<{self.__class__.__name__} name={self.name} "
-      f"busy={self.busy} latency_cycles={self.latency_cycles} "
-      f"busy_cycles={self.busy_cycles} idle_cycles={self.idle_cycles} "
-      f"stalled_cycles={self.stalled_cycles} "
-      f"utilization={self.utilization:.1%}>"
-    )
+    return f"<{self.__class__.__name__} name={self.name} busy={self.busy} latency_cycles={self.latency_cycles}" \
+      f"busy_cycles={self.busy_cycles} idle_cycles={self.idle_cycles} stalled_cycles={self.stalled_cycles} utilization={self.utilization:.1%}>"
