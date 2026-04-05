@@ -2,6 +2,7 @@ import wfdb
 import numpy as np
 import matplotlib.pyplot as plt
 from clock_unit import ClockUnit
+from config import BATTERY_CAPACITY_MAH, BATTERY_VOLTAGE, DATA_RECORDER_CAPACITY, DYNAMIC_POWER_UW_PER_MHZ, FIXED_POINT_SCALE, MAX_SAMPLES, SAMPLE_RATE, SWEEP_FREQUENCIES_HZ
 from data_uploader import DataUploader
 from fifo_buffer import FIFOBuffer
 from mac_unit import MACUnit
@@ -9,10 +10,7 @@ from squaring_unit import SquaringUnit
 from mwi_unit import MWIUnit
 from threshold_unit import ThresholdUnit
 from data_recorder import DataRecorder
-from config import (
-  FIXED_POINT_SCALE, SAMPLE_RATE, DATA_RECORDER_CAPACITY, MAX_SAMPLES,
-  BATTERY_CAPACITY_MAH, BATTERY_VOLTAGE, DYNAMIC_POWER_UW_PER_MHZ, SWEEP_FREQUENCIES_HZ
-)
+
 
 def get_patient_bpm(patient_number, data_dir="ecg_data"):
   """
@@ -24,8 +22,7 @@ def get_patient_bpm(patient_number, data_dir="ecg_data"):
   r_peaks = annotation.sample[np.isin(annotation.symbol, ["N","L","R","B","A","a","J","S","V","F","e","j"])]
   rr_intervals = np.diff(r_peaks) / record.fs
   return round(60 / np.median(rr_intervals))
-  
-# TODO: Do we want to make this some sort of hardware unit?
+
 def load_data(record_path: str):
   """
   Load both ECG leads and combine them into a single signal before processing.
@@ -236,5 +233,5 @@ if __name__ == "__main__":
     print_performance(float_result["units"], f"Float {f_hz//1000}kHz")
     print_performance(fixed_result["units"], f"Fixed {f_hz//1000}kHz")
 
-    # plot_recorders(float_result["recorders"], f"Patient {patient_number} Float {f_hz//1000}kHz")
-    # plot_recorders(fixed_result["recorders"], f"Patient {patient_number} Fixed {f_hz//1000}kHz")
+    plot_recorders(float_result["recorders"], f"Patient {patient_number} Float {f_hz//1000}kHz")
+    plot_recorders(fixed_result["recorders"], f"Patient {patient_number} Fixed {f_hz//1000}kHz")

@@ -20,23 +20,29 @@ class MACUnit(HardwareUnit):
   Coefficients are stored in a Coefficient ROM inside this hardware unit.
 
   1.
-  Low-pass filter: y[n] = 2*y[n-1] - y[n-2] + x[n] - 2*x[n-6] + x[n-12]
+  Low-pass Filter: y[n] = 2*y[n-1] - y[n-2] + x[n] - 2*x[n-6] + x[n-12]
   Coefficients: [2, -1, 1, -2, 1]
 
   2.
-  High-pass filter: y[n] = 32*x[n-16] - y[n-1] - x[n] + x[n-32]
+  High-pass Filter: y[n] = 32*x[n-16] - y[n-1] - x[n] + x[n-32]
   Coefficients: [32, -1, -1, 1]
 
   3.
-  Derivative filter: y[n] = (1/8)*[2*x[n] + x[n-1] - x[n-3] - 2*x[n-4]]
+  Derivative Filter: y[n] = (1/8)*[2*x[n] + x[n-1] - x[n-3] - 2*x[n-4]]
   Coefficients: [2/8, 1/8, -1/8, -2/8]
 
-  Circular history buffers:
+  Hardware: 1 MAC, 3 Circular Buffers, 1 Coefficient ROM, 3 IIR Registers, 3 Intermediate Registers (LowPass, HighPass, and Derivative), 1 Program Sequencer
+
+  For the purposes of this simulation, we only model MAC operation cycles. Overheads such as register file accesses,
+  coefficient ROM reads, and program sequencer state transitions are not modeled. Since these costs are identical between
+  fixed-point and floating-point modes, they do not affect the comparative analysis of fixed vs float performance or battery life.
+
+  Circular History Buffers:
   1. lp_buffer[13]
   2. hp_buffer[33]
   3. dv_buffer[5]
 
-  IIR state registers:
+  IIR State Registers:
   LowPass: lp_y1, lp_y2
   HighPass: hp_y1
   """
@@ -56,12 +62,12 @@ class MACUnit(HardwareUnit):
       # Derivative: 4 MAC operations (4 FIR)
       self.dv_cycles = 4 * FLOAT_MAC_CYCLES
 
-    total_latency = self.lp_cycles + self.hp_cycles + self.dv_cycles
-    super().__init__(name, latency_cycles=total_latency, is_fixed_point=is_fixed_point)
+    latency = self.lp_cycles + self.hp_cycles + self.dv_cycles
+    super().__init__(name, latency_cycles=latency, is_fixed_point=is_fixed_point)
 
     self.fifo = fifo
 
-    # History buffers (Shift Registers)
+    # History Buffers
     self.lp_buffer = CircularBuffer(13, dtype=int if is_fixed_point else float)
     self.hp_buffer = CircularBuffer(33, dtype=int if is_fixed_point else float)
     self.dv_buffer = CircularBuffer(5,  dtype=int if is_fixed_point else float)

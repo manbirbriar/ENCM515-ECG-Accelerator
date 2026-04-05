@@ -33,13 +33,13 @@ FIXED_COMPARE_CYCLES: int = 1
 FIXED_MAC_CYCLES: int = 1
 
 # Floating-point latencies model a software FP library (no hardware FPU)
-# https://blog.segger.com/floating-point-face-off-part-2-comparing-performance/#:~:text=It%20is%20surprising%20to%20see,such%20as%20digital%20filter%20applications
-FLOAT_ADD_CYCLES: int = 31
-FLOAT_SUB_CYCLES: int = 39
-FLOAT_MUL_CYCLES: int = 26
-FLOAT_DIV_CYCLES: int = 53
-FLOAT_COMPARE_CYCLES: int = 13
-FLOAT_MAC_CYCLES: int = 60
+# https://blog.segger.com/wp-content/uploads/2019/11/Bench_Comparison.pdf
+FLOAT_ADD_CYCLES: int = 52
+FLOAT_SUB_CYCLES: int = 56
+FLOAT_MUL_CYCLES: int = 154
+FLOAT_DIV_CYCLES: int = 144
+FLOAT_COMPARE_CYCLES: int = 51
+FLOAT_MAC_CYCLES: int = 206
 
 # https://developer.arm.com/Processors/Cortex-M4
 # Battery and power model parameters

@@ -1,104 +1,107 @@
 import numpy as np
+from config import FIXED_ADD_CYCLES, FIXED_COMPARE_CYCLES, FIXED_MAC_CYCLES, FIXED_POINT_SCALE, FIXED_SUB_CYCLES, FLOAT_ADD_CYCLES, FLOAT_COMPARE_CYCLES, FLOAT_MAC_CYCLES, FLOAT_SUB_CYCLES, MIN_PEAK_WIDTH, REFRACTORY_SAMPLES
+
 from hardware_unit import HardwareUnit
-from config import ( FIXED_POINT_SCALE,FIXED_ADD_CYCLES, FIXED_SUB_CYCLES, FIXED_MUL_CYCLES, FIXED_COMPARE_CYCLES,
-  FLOAT_ADD_CYCLES, FLOAT_SUB_CYCLES, FLOAT_MUL_CYCLES, FLOAT_COMPARE_CYCLES,
-  MIN_PEAK_WIDTH, REFRACTORY_SAMPLES,
-)
 
 class ThresholdUnit(HardwareUnit):
   """
-  Adaptive threshold peak detector
+  https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=4122029
+  
+  Adaptive Threshold Peak Detector
 
-  Hardware-style pieces this model keeps track of:
-    - Comparator: checks whether sample > threshold
-    - Refractory counter: enforces a minimum gap between peaks
-    - Width counter: counts how long the signal stays above threshold
-    - Shift register: keeps prev1 and prev2 for slope checks
-    - Multipliers/adders: update SPKI, NPKI, and threshold
-    - Registers: store SPKI, NPKI, threshold, and last_peak_sample
+  A peak is accepted only if all of the following are true:
+    - Slope was rising
+    - Slope just fell
+    - Prev1 above Threshold
+    - Refractory period elapsed
+    - Signal above threshold for MIN_PEAK_WIDTH
 
-  A peak is accepted only if all checks pass:
-    - slope was rising (prev1 > prev2)
-    - slope just turned downward (sample < prev1)
-    - prev1 is above the current threshold
-    - refractory period has passed
-    - signal stayed above threshold for at least MIN_PEAK_WIDTH samples
-
-  NPKI follows the original Pan-Tompkins idea:
-    - update NPKI only at local maxima that are not real peaks
-    - this avoids driving NPKI toward zero during flat regions
+  Hardware: 1 ALU, 1 MAC, 8 Registers (SPKI, NPKI, Threshold, Prev1, Prev2, LastPeakSample, SampleCount, AboveThresholdCount)
   """
   def __init__(self, name: str, sample_rate: int, is_fixed_point: bool):
+    if is_fixed_point:
+      # Slope and threshold comparisons: 3 CMP operations
+      slope_threshold_compare = 3 * FIXED_COMPARE_CYCLES
+      # Refractory check: 1 SUB + 1 CMP operation
+      refractory_check = FIXED_SUB_CYCLES + FIXED_COMPARE_CYCLES
+      # Width counter update: 1 CMP + 1 ADD operation
+      width_counter_update = FIXED_COMPARE_CYCLES + FIXED_ADD_CYCLES
+      # SPKI or NPKI adaptive update: 2 MAC operations (worst case)
+      spki_npki_adaptive_update = 2 * FIXED_MAC_CYCLES
+      # Threshold recompute: 1 SUB + 1 MAC operation
+      threshold_recompute = FIXED_SUB_CYCLES + FIXED_MAC_CYCLES
+      # Register updates: 1 ADD operation
+      register_update = FIXED_ADD_CYCLES
+    else:
+      # Slope and threshold comparisons: 3 CMP operations
+      slope_threshold_compare = 3 * FLOAT_COMPARE_CYCLES
+      # Refractory check: 1 SUB and 1 CMP operation
+      refractory_check = FLOAT_SUB_CYCLES + FLOAT_COMPARE_CYCLES
+      # Width counter update: 1 CMP and 1 ADD operation
+      width_counter_update = FLOAT_COMPARE_CYCLES + FLOAT_ADD_CYCLES
+      # SPKI or NPKI adaptive update: 2 MAC operations (worst case)
+      spki_npki_adaptive_update = 2 * FLOAT_MAC_CYCLES
+      # Threshold recompute: 1 SUB and 1 MAC operation
+      threshold_recompute = FLOAT_SUB_CYCLES + FLOAT_MAC_CYCLES
+      # Register updates: 1 ADD operation
+      register_update = FLOAT_ADD_CYCLES
 
-    add_cycles = FIXED_ADD_CYCLES if is_fixed_point else FLOAT_ADD_CYCLES
-    sub_cycles = FIXED_SUB_CYCLES if is_fixed_point else FLOAT_SUB_CYCLES
-    mul_cycles = FIXED_MUL_CYCLES if is_fixed_point else FLOAT_MUL_CYCLES
-    compare_cycles = FIXED_COMPARE_CYCLES if is_fixed_point else FLOAT_COMPARE_CYCLES
-
-    # Build latency from the five logical stages of this unit
-    refractory_cycles = sub_cycles + compare_cycles
-    adaptive_cycles = 2 * mul_cycles + add_cycles
-    threshold_cycles = sub_cycles + mul_cycles + add_cycles
-    count_cycles = add_cycles
-
-    latency = compare_cycles + refractory_cycles + adaptive_cycles + threshold_cycles + count_cycles
+    latency = slope_threshold_compare + refractory_check + width_counter_update + \
+      spki_npki_adaptive_update + threshold_recompute + register_update
+    
     super().__init__(name, latency_cycles=latency, is_fixed_point=is_fixed_point)
 
     self.sample_rate = sample_rate
 
-    # In fixed-point mode, scale initial estimates into integer range
-    if is_fixed_point:
-      scale = FIXED_POINT_SCALE
-    else:
-      scale = 1.0
+    scale = FIXED_POINT_SCALE if is_fixed_point else 1.0
 
+    # Registers
     self.spki = 2.0 * scale
     self.npki = 0.5 * scale
     self.threshold = 1.0 * scale
 
     self.prev1 = 0.0
     self.prev2 = 0.0
-    self.above_threshold_count = 0
-
+    
     self.sample_count = 0
+    self.above_threshold_count = 0
     self.last_peak_sample = -REFRACTORY_SAMPLES
+
     self.peaks = []
 
   def compute(self, sample) -> float:
-    # Decide whether prev1 is a valid local peak candidate
+    # Slope and Threshold Comparisons
     rising = self.prev1 > self.prev2
     falling = sample < self.prev1
-    local_max = rising and falling   # prev1 sits at a local maximum
+    local_max = rising and falling
     above = self.prev1 > self.threshold
+
+    # Refractory Check
     refractory_ok = (self.sample_count - self.last_peak_sample) > REFRACTORY_SAMPLES
 
-    # Require a short run above threshold to reduce spurious detections
+    # Width Counter Update
     if sample > self.threshold:
       self.above_threshold_count += 1
     else:
       self.above_threshold_count = 0
-
     width_ok = self.above_threshold_count >= MIN_PEAK_WIDTH
 
+    # Adaptive SPKI or NPKI Update
     if local_max and above and refractory_ok and width_ok:
-      # Real QRS detection: update signal estimate using the peak value
       self.peaks.append(self.sample_count)
       self.last_peak_sample = self.sample_count
       self.spki = 0.125 * self.prev1 + 0.875 * self.spki
       detection_event = 1.0
     elif local_max:
-      # Not a QRS peak, so treat it as noise and update NPKI
-      # We only do this on local maxima (using prev1), not every sample,
-      # which keeps NPKI from collapsing between beats
       self.npki = 0.125 * self.prev1 + 0.875 * self.npki
       detection_event = 0.0
     else:
       detection_event = 0.0
 
-    # Recompute the adaptive threshold from SPKI and NPKI
+    # Threshold Recompute
     self.threshold = self.npki + 0.25 * (self.spki - self.npki)
 
-    # Move the sample clock forward and shift history values
+    # Register Update
     self.sample_count += 1
     self.prev2 = self.prev1
     self.prev1 = sample

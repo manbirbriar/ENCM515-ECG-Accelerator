@@ -4,8 +4,9 @@ from config import FIXED_POINT_BITS, FIXED_MUL_CYCLES, FIXED_SHIFT_CYCLES, FLOAT
 
 class SquaringUnit(HardwareUnit):
   """
-  Dedicated Squarer: y[n] = x[n]^2
+  Squarer: y[n] = x[n]^2
   No history or state.
+  Hardware: Squarer
   """
   def __init__(self, name: str, is_fixed_point: bool):
     if is_fixed_point:
