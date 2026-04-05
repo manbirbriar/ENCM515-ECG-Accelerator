@@ -2,7 +2,7 @@ from __future__ import annotations
 from collections import deque
 from hardware_unit import HardwareUnit
 
-class InputFIFO(HardwareUnit):
+class FIFOBuffer(HardwareUnit):
   """
   FIFO buffer between DataUploader and MACUnit.
   Absorbs incoming samples while the MAC is busy processing.

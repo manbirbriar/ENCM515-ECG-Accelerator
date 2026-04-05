@@ -1,5 +1,5 @@
 from hardware_unit import HardwareUnit
-from fifo import InputFIFO
+from fifo_buffer import FIFOBuffer
 import numpy as np
 
 class DataUploader(HardwareUnit):
@@ -9,7 +9,7 @@ class DataUploader(HardwareUnit):
   reflecting the fact that the hardware clock runs faster than the sample rate.
   Pushes samples into the InputFIFO rather than directly into the processing pipeline.
   """
-  def __init__(self, name: str, samples: np.ndarray, cycles_per_sample: int, fifo: InputFIFO):
+  def __init__(self, name: str, samples: np.ndarray, cycles_per_sample: int, fifo: FIFOBuffer):
     super().__init__(name, latency_cycles=1)
 
     self.samples = samples

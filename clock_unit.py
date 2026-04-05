@@ -13,11 +13,11 @@ class ClockUnit:
     self.units: list[HardwareUnit] = []
     self.stalled_cycles: int = 0
 
-  def subscribe(self, unit: HardwareUnit) -> 'ClockUnit':
+  def subscribe(self, unit: HardwareUnit) -> "ClockUnit":
     self.units.append(unit)
     return self
 
-  def subscribe_many(self, units: list[HardwareUnit]) -> 'ClockUnit':
+  def subscribe_many(self, units: list[HardwareUnit]) -> "ClockUnit":
     for unit in units:
       self.subscribe(unit)
     return self

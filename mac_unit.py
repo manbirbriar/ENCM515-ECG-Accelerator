@@ -1,12 +1,9 @@
 from __future__ import annotations
 from hardware_unit import HardwareUnit
 from circular_buffer import CircularBuffer
-from fifo import InputFIFO
+from fifo_buffer import FIFOBuffer
 from data_recorder import DataRecorder
-from config import (
-  FIXED_MAC_CYCLES, FLOAT_MAC_CYCLES,
-  FIXED_POINT_BITS
-)
+from config import FIXED_MAC_CYCLES, FLOAT_MAC_CYCLES
 
 # Internal state machine states
 IDLE         = "IDLE"
@@ -39,7 +36,7 @@ class MACUnit(HardwareUnit):
     lp_y1, lp_y2      LowPass recurrence state
     hp_y1             HighPass recurrence state
   """
-  def __init__(self, name: str, fifo: InputFIFO, is_fixed_point: bool):
+  def __init__(self, name: str, fifo: FIFOBuffer, is_fixed_point: bool):
 
     # Per-sample latency for each kernel using MAC operations
     if is_fixed_point:
