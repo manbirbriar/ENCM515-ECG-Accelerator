@@ -14,7 +14,6 @@ from config import (
   BATTERY_CAPACITY_MAH, BATTERY_VOLTAGE, DYNAMIC_POWER_UW_PER_MHZ, SWEEP_FREQUENCIES_HZ
 )
 
-
 def get_patient_bpm(patient_number, data_dir="ecg_data"):
   """
   Gets the patients actual BPM.
@@ -25,7 +24,6 @@ def get_patient_bpm(patient_number, data_dir="ecg_data"):
   r_peaks = annotation.sample[np.isin(annotation.symbol, ["N","L","R","B","A","a","J","S","V","F","e","j"])]
   rr_intervals = np.diff(r_peaks) / record.fs
   return round(60 / np.median(rr_intervals))
-  
   
 # TODO: Do we want to make this some sort of hardware unit?
 def load_data(record_path: str):
@@ -38,7 +36,6 @@ def load_data(record_path: str):
   combined = (lead0 + lead1) / 2.0
   return combined
   
-
 def build_pipeline(samples: np.ndarray, is_fixed: bool, cycles_per_sample: int, fifo_size: int):
   """
   Builds the single processing pipeline for the combined ECG signal.
@@ -76,7 +73,6 @@ def build_pipeline(samples: np.ndarray, is_fixed: bool, cycles_per_sample: int, 
   
   return units, fifo, mac, threshold, recorders
   
-  
 def run_simulation(samples, is_fixed: bool, clock_frequency_hz: int):
   """
   Run the single-lane pipeline simulation on the multi-lead ECG signal.
@@ -109,7 +105,6 @@ def run_simulation(samples, is_fixed: bool, clock_frequency_hz: int):
   bpm = threshold.get_bpm()
   return recorders, threshold, bpm, clock, units, fifo
   
-
 def compute_battery_life(clock_frequency_hz: int) -> dict:
   """
   Battery life is calculated using the ARM Cortex-M4 40LP dynamic power model.
@@ -122,7 +117,6 @@ def compute_battery_life(clock_frequency_hz: int) -> dict:
   
   return {"clock_mhz": clock_mhz, "dynamic_power_uW": dynamic_power_uW, "current_ma": current_ma, "battery_life_hours": battery_life_hours}
   
-
 def run_frequency_sweep(float_samples, fixed_samples):
   """
   Run both fixed and float pipelines at each frequency.
@@ -174,7 +168,6 @@ def run_frequency_sweep(float_samples, fixed_samples):
   
   return results
   
-
 def print_sweep_summary(results: list):
   print("\nFrequency Sweeps")
   print(f"{"Configuration":<22} {"Freq(kHz)":>10} {"Dropped":>9} {"BPM":>7} {"Throughput(samples/s)":>22} {"Power(µW)":>11} {"Battery(hours)":>12} {"Valid":>6} ")
@@ -184,14 +177,12 @@ def print_sweep_summary(results: list):
       f"{r["battery_life_hours"]:>12.1f} {"Yes" if r["valid"] else "No":>6}"
     )
   
-
 def print_performance(units: list, label: str):
   print(f"\n{label} Performance:")
   print(f"{"Unit":<30} {"Busy":>8} {"Idle":>8} {"Stalled":>8} {"Util":>8}")
   for u in units:
     if hasattr(u, "busy_cycles"):
       print(f"{u.name:<30} {u.busy_cycles:>8} {u.idle_cycles:>8} {u.stalled_cycles:>8} {u.utilization:>8.1%}")
-  
   
 def plot_recorders(recorders: dict, label: str):
   stages = ["raw", "lp", "hp", "dv", "squaring", "mwi", "threshold"]
@@ -210,7 +201,6 @@ def plot_recorders(recorders: dict, label: str):
   plt.tight_layout()
   plt.show()
   
-  
 def compute_rmse(float_recorders, fixed_recorders, label: str):
   stages = ["raw", "lp", "hp", "dv", "squaring", "mwi"]
   print(f"\nFloat vs Fixed RMSE: {label}")
@@ -223,9 +213,8 @@ def compute_rmse(float_recorders, fixed_recorders, label: str):
     rmse = np.sqrt(np.mean((f_sig[:min_len] - x_sig[:min_len])**2))
     print(f"{stage:<12} RMSE: {rmse:.8f}")
   
-
 if __name__ == "__main__":
-  patient_number = 215
+  patient_number = 116
   record_path = f"ecg_data/patient_{patient_number}/{patient_number}"
   
   float_data = load_data(record_path)
@@ -247,5 +236,5 @@ if __name__ == "__main__":
     print_performance(float_result["units"], f"Float {f_hz//1000}kHz")
     print_performance(fixed_result["units"], f"Fixed {f_hz//1000}kHz")
 
-    plot_recorders(float_result["recorders"], f"Patient {patient_number} Float {f_hz//1000}kHz")
-    plot_recorders(fixed_result["recorders"], f"Patient {patient_number} Fixed {f_hz//1000}kHz")
+    # plot_recorders(float_result["recorders"], f"Patient {patient_number} Float {f_hz//1000}kHz")
+    # plot_recorders(fixed_result["recorders"], f"Patient {patient_number} Fixed {f_hz//1000}kHz")
