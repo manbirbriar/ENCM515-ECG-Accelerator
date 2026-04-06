@@ -47,10 +47,10 @@ FLOAT_MAC_CYCLES: int = 206
 
 # https://developer.arm.com/Processors/Cortex-M4
 # Battery and power model parameters
-# We are emulating a ARM Cortex-M4 40LP at 1.1V which is a typical wearable configuration
+# We are emulating a ARM Cortex-M4 180ULL at 1.8V which is a typical wearable configuration
 BATTERY_CAPACITY_MAH: int = 225  # CR2032 coin cell
-BATTERY_VOLTAGE: float = 1.1  # Volts (ARM 40LP)
-DYNAMIC_POWER_UW_PER_MHZ: float = 12.26  # µW/MHz at 1.1V (ARM 40LP)
+BATTERY_VOLTAGE: float = 1.8  # Volts (ARM 180ULL)
+DYNAMIC_POWER_UW_PER_MHZ: float = 151  # µW/MHz at 1.8V (ARM 180ULL)
 
 # NOTE: These values are no longer used from here
 
