@@ -1,4 +1,5 @@
 from __future__ import annotations
+from math import ceil
 from hardware_unit import HardwareUnit
 from circular_buffer import CircularBuffer
 from fifo_buffer import FIFOBuffer
@@ -20,7 +21,8 @@ class MACUnit(HardwareUnit):
   Coefficients are stored in a Coefficient ROM inside this hardware unit.
 
   1.
-  Low-pass Filter: y[n] = 2*y[n-1] - y[n-2] + x[n] - 2*x[n-6] + x[n-12]
+  Low-pass Filter: 
+  y[n] = 2*y[n-1] - y[n-2] + x[n] - 2*x[n-6] + x[n-12]
   Coefficients: [2, -1, 1, -2, 1]
 
   2.
@@ -46,21 +48,21 @@ class MACUnit(HardwareUnit):
   LowPass: lp_y1, lp_y2
   HighPass: hp_y1
   """
-  def __init__(self, name: str, fifo: FIFOBuffer, is_fixed_point: bool):
+  def __init__(self, name: str, fifo: FIFOBuffer, is_fixed_point: bool, vector_length: int):
     if is_fixed_point:
       # LowPass: 5 MAC operations (2 IIR + 3 FIR)
-      self.lp_cycles = 5 * FIXED_MAC_CYCLES
+      self.lp_cycles = ceil(5 / vector_length) * FIXED_MAC_CYCLES
       # HighPass: 4 MAC operations (1 IIR + 3 FIR)
-      self.hp_cycles = 4 * FIXED_MAC_CYCLES
+      self.hp_cycles = ceil(4 / vector_length) * FIXED_MAC_CYCLES
       # Derivative: 4 MAC operations (4 FIR)
-      self.dv_cycles = 4 * FIXED_MAC_CYCLES
+      self.dv_cycles = ceil(4 / vector_length) * FIXED_MAC_CYCLES
     else:
       # LowPass: 5 MAC operations (2 IIR + 3 FIR)
-      self.lp_cycles = 5 * FLOAT_MAC_CYCLES
+      self.lp_cycles = ceil(5 / vector_length) * FLOAT_MAC_CYCLES
       # HighPass: 4 MAC operations (1 IIR + 3 FIR)
-      self.hp_cycles = 4 * FLOAT_MAC_CYCLES
+      self.hp_cycles = ceil(4 / vector_length)* FLOAT_MAC_CYCLES
       # Derivative: 4 MAC operations (4 FIR)
-      self.dv_cycles = 4 * FLOAT_MAC_CYCLES
+      self.dv_cycles = ceil(4 / vector_length) * FLOAT_MAC_CYCLES
 
     latency = self.lp_cycles + self.hp_cycles + self.dv_cycles
     super().__init__(name, latency_cycles=latency, is_fixed_point=is_fixed_point)

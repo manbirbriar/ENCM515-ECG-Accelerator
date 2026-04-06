@@ -2,7 +2,7 @@ import wfdb
 import numpy as np
 import matplotlib.pyplot as plt
 from clock_unit import ClockUnit
-from config import BATTERY_CAPACITY_MAH, BATTERY_VOLTAGE, DATA_RECORDER_CAPACITY, DYNAMIC_POWER_UW_PER_MHZ, FIXED_POINT_SCALE, MAX_SAMPLES, SAMPLE_RATE, SWEEP_FREQUENCIES_HZ
+from config import BATTERY_CAPACITY_MAH, BATTERY_VOLTAGE, DATA_RECORDER_CAPACITY, DYNAMIC_POWER_UW_PER_MHZ, FIXED_POINT_SCALE, MAX_SAMPLES, SAMPLE_RATE, SWEEP_FREQUENCIES_HZ, VECTOR_LENGTHS
 from data_uploader import DataUploader
 from fifo_buffer import FIFOBuffer
 from mac_unit import MACUnit
@@ -10,7 +10,6 @@ from squaring_unit import SquaringUnit
 from mwi_unit import MWIUnit
 from threshold_unit import ThresholdUnit
 from data_recorder import DataRecorder
-
 
 def get_patient_bpm(patient_number, data_dir="ecg_data"):
   """
@@ -33,7 +32,7 @@ def load_data(record_path: str):
   combined = (lead0 + lead1) / 2.0
   return combined
   
-def build_pipeline(samples: np.ndarray, is_fixed: bool, cycles_per_sample: int, fifo_size: int):
+def build_pipeline(samples: np.ndarray, is_fixed: bool, cycles_per_sample: int, fifo_size: int, vector_length: int = 1):
   """
   Builds the single processing pipeline for the combined ECG signal.
   """
@@ -47,7 +46,7 @@ def build_pipeline(samples: np.ndarray, is_fixed: bool, cycles_per_sample: int, 
   
   fifo = FIFOBuffer("fifo", fifo_size)
   uploader = DataUploader("uploader", samples, cycles_per_sample, fifo)
-  mac = MACUnit("mac", fifo, is_fixed_point=is_fixed)
+  mac = MACUnit("mac", fifo, is_fixed_point=is_fixed, vector_length=vector_length)
   squaring = SquaringUnit("squaring", is_fixed_point=is_fixed)
   mwi = MWIUnit("mwi", is_fixed_point=is_fixed)
   threshold = ThresholdUnit("threshold", SAMPLE_RATE, is_fixed_point=is_fixed)
@@ -70,14 +69,14 @@ def build_pipeline(samples: np.ndarray, is_fixed: bool, cycles_per_sample: int, 
   
   return units, fifo, mac, threshold, recorders
   
-def run_simulation(samples, is_fixed: bool, clock_frequency_hz: int):
+def run_simulation(samples, is_fixed: bool, clock_frequency_hz: int, vector_length: int = 1):
   """
   Run the single-lane pipeline simulation on the multi-lead ECG signal.
   """  
   cycles_per_sample = clock_frequency_hz // SAMPLE_RATE
   fifo_size = cycles_per_sample * 2
   
-  units, fifo, mac, threshold, recorders = build_pipeline(samples, is_fixed, cycles_per_sample, fifo_size)
+  units, fifo, mac, threshold, recorders = build_pipeline(samples, is_fixed, cycles_per_sample, fifo_size, vector_length=vector_length)
   
   clock = ClockUnit()
   clock.subscribe_many(units)
@@ -87,6 +86,7 @@ def run_simulation(samples, is_fixed: bool, clock_frequency_hz: int):
   while True:
     clock.tick()
   
+    # Ensures that simulator is done
     uploaders_done = not uploader.active
     fifo_empty = fifo.is_empty()
     pipeline_drained = all(
@@ -113,66 +113,6 @@ def compute_battery_life(clock_frequency_hz: int) -> dict:
   battery_life_hours = BATTERY_CAPACITY_MAH / current_ma
   
   return {"clock_mhz": clock_mhz, "dynamic_power_uW": dynamic_power_uW, "current_ma": current_ma, "battery_life_hours": battery_life_hours}
-  
-def run_frequency_sweep(float_samples, fixed_samples):
-  """
-  Run both fixed and float pipelines at each frequency.
-  Battery life differs between fixed and float because each mode has a different minimum viable clock frequency.
-  """
-  results = []
-  
-  for f_hz in SWEEP_FREQUENCIES_HZ:
-    # cycles_per_sample = f_hz // SAMPLE_RATE
-    # print(f"\n\nClock: {f_hz} Hz")
-    # print(f"Cycles per Sample: {cycles_per_sample}")
-  
-    battery = compute_battery_life(f_hz)
-  
-    for label, is_fixed, samples in [("Float", False, float_samples), ("Fixed", True, fixed_samples)]:
-      
-      recorders, threshold, bpm, clock, units, fifo = run_simulation(samples, is_fixed=is_fixed, clock_frequency_hz=f_hz)
-  
-      total_cycles = clock.cycle
-      dropped = fifo.dropped_samples
-      valid = dropped == 0
-      throughput = (len(samples) - dropped) / (total_cycles / f_hz)
-  
-      # print(f"\n{label}:")
-      # print(f"Total cycles: {total_cycles}")
-      # print(f"Dropped samples: {dropped}")
-      # print(f"BPM detected: {bpm:.4f}")
-      # print(f"Power draw: {battery["dynamic_power_uW"]:.4f} µW")
-      # print(f"Battery life: {battery["battery_life_hours"]:.4f}h")
-      # print(f"Validity: {"VALID" if valid else "INVALID (samples dropped)"}")
-  
-      results.append({
-        "label": f"{label} {f_hz//1000}kHz",
-        "mode": label,
-        "freq_hz": f_hz,
-        "freq_khz": f_hz / 1000,
-        "total_cycles": total_cycles,
-        "dropped": dropped,
-        "valid": valid,
-        "throughput": throughput,
-        "bpm": bpm,
-        "dynamic_power_uW": battery["dynamic_power_uW"],
-        "battery_life_hours": battery["battery_life_hours"],
-        "recorders": recorders,
-        "threshold": threshold,
-        "units": units,
-        "fifo": fifo,
-      })
-  
-  return results
-  
-def print_sweep_summary(results: list):
-  print("\nFrequency Sweeps")
-  print(f"{"Configuration":<22} {"Freq(kHz)":>10} {"Dropped":>9} {"BPM":>7} {"Throughput(samples/s)":>22} {"Power(µW)":>11} {"Battery(hours)":>12} {"Valid":>6} ")
-  for r in results:
-    print(
-      f"{r["label"]:<22} {r["freq_khz"]:>10.1f} {r["dropped"]:>9} {r["bpm"]:>7.1f} {r["throughput"]:>22.1f} {r["dynamic_power_uW"]:>11.4f} "
-      f"{r["battery_life_hours"]:>12.1f} {"Yes" if r["valid"] else "No":>6}"
-    )
   
 def print_performance(units: list, label: str):
   print(f"\n{label} Performance:")
@@ -210,6 +150,70 @@ def compute_rmse(float_recorders, fixed_recorders, label: str):
     rmse = np.sqrt(np.mean((f_sig[:min_len] - x_sig[:min_len])**2))
     print(f"{stage:<12} RMSE: {rmse:.8f}")
   
+def run_sweep(float_samples, fixed_samples):
+  results = []
+
+  for f_hz in SWEEP_FREQUENCIES_HZ:
+    cycles_per_sample = f_hz // SAMPLE_RATE
+    battery = compute_battery_life(f_hz)
+    print(f"\n\nClock: {f_hz} Hz  Cycles/sample: {cycles_per_sample}")
+
+    for vector_length in VECTOR_LENGTHS:
+      for label, is_fixed, samples in [("Float", False, float_samples), ("Fixed", True, fixed_samples)]:
+
+        recorders, threshold, bpm, clock, units, fifo = run_simulation(
+          samples, is_fixed=is_fixed, clock_frequency_hz=f_hz,
+          vector_length=vector_length
+        )
+
+        mac = next(u for u in units if isinstance(u, MACUnit))
+        total_cycles = clock.cycle
+        dropped = fifo.dropped_samples
+        valid = dropped == 0
+        throughput = (len(samples) - dropped) / (total_cycles / f_hz)
+
+        simd_tag = f"VL={vector_length}" if vector_length > 1 else "Scalar"
+        print(f"  {label} {simd_tag}: MAC latency={mac.latency_cycles}  dropped={dropped}  BPM={bpm:.1f}  {"VALID" if valid else "INVALID"}")
+
+        results.append({
+          "label": f"{label} {f_hz//1000}kHz {simd_tag}",
+          "mode": label,
+          "freq_hz": f_hz,
+          "freq_khz": f_hz / 1000,
+          "vector_length": vector_length,
+          "mac_latency": mac.latency_cycles,
+          "total_cycles": total_cycles,
+          "dropped": dropped,
+          "valid": valid,
+          "throughput": throughput,
+          "bpm": bpm,
+          "dynamic_power_uW": battery["dynamic_power_uW"],
+          "battery_life_hours": battery["battery_life_hours"],
+          "recorders": recorders,
+          "threshold": threshold,
+          "units": units,
+          "fifo": fifo,
+        })
+
+  return results
+
+
+def print_sweep_summary(results: list):
+  baselines = {
+    (r["freq_hz"], r["mode"]): r["mac_latency"]
+    for r in results if r["vector_length"] == 1
+  }
+
+  print("\nSweep Summary")
+  print(f"{"Configuration":<30} {"VL":>4} {"MAC lat":>8} {"Speedup":>8} {"Cycles":>10} {"Dropped":>8} {"Throughput":>12} {"Power(µW)":>11} {"Battery(h)":>11} {"Valid":>6}")
+  for r in results:
+    baseline = baselines.get((r["freq_hz"], r["mode"]))
+    speedup = f"{baseline / r["mac_latency"]:.3f}x" if baseline else "-"
+    print(
+      f"{r["label"]:<30} {r["vector_length"]:>4} {r["mac_latency"]:>8} {speedup:>8} {r["total_cycles"]:>10} {r["dropped"]:>8} "
+      f"{r["throughput"]:>12.1f} {r["dynamic_power_uW"]:>11.4f} {r["battery_life_hours"]:>11.1f} {"Yes" if r["valid"] else "No":>6}"
+    )
+
 if __name__ == "__main__":
   patient_number = 116
   record_path = f"ecg_data/patient_{patient_number}/{patient_number}"
@@ -221,12 +225,12 @@ if __name__ == "__main__":
   print(f"Patient #{patient_number}")
   print(f"Actual BPM (Database): {actual_bpm}")
   
-  results = run_frequency_sweep(float_data, fixed_data)
+  results = run_sweep(float_data, fixed_data)
   print_sweep_summary(results)
 
   for f_hz in SWEEP_FREQUENCIES_HZ:
-    float_result = next(r for r in results if r["mode"] == "Float" and r["freq_hz"] == f_hz)
-    fixed_result = next(r for r in results if r["mode"] == "Fixed" and r["freq_hz"] == f_hz)
+    float_result = next(r for r in results if r["mode"] == "Float" and r["freq_hz"] == f_hz and r["vector_length"] == 1)
+    fixed_result = next(r for r in results if r["mode"] == "Fixed" and r["freq_hz"] == f_hz and r["vector_length"] == 1)
 
     compute_rmse(float_result["recorders"], fixed_result["recorders"], label=f"{f_hz//1000}kHz")
 

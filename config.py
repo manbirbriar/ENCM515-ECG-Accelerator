@@ -20,7 +20,11 @@ DATA_RECORDER_CAPACITY: int = 2500
 # Number of samples to process
 MAX_SAMPLES: int = 2500
 
+# Frequency Testing
 SWEEP_FREQUENCIES_HZ = [3600, 36000, 360000]
+
+# MAC Unit SIMD Vectorization
+VECTOR_LENGTHS = [1, 4, 8, 12]
 
 # Fixed-point latencies model a ARM Cortex-M4
 # https://developer.arm.com/documentation/ddi0439/b/CHDDIGAC
